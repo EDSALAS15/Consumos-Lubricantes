@@ -265,48 +265,73 @@ const DD_CFG = [
 ];
 
 function updateAllDropdowns(){
-  // Unidades activas para filtros en cascada
-  const allActiveU = getActiveUnits();
+  // UNA SOLA pasada sobre UNITS para calcular disponibles de todos los campos
+  // Para cada campo: qué valores están disponibles ignorando ese campo
+  const avail = {D:new Set(),T:new Set(),M:new Set(),C:new Set(),MO:new Set(),E:new Set()};
 
-  for(const {key, ddId, col} of DD_CFG){
+  for(let ui=0; ui<nU; ui++){
+    const u = UNITS[ui];
+    const passD  = !SEL.D.size  || SEL.D.has(u[0]);
+    const passE  = !SEL.E.size  || SEL.E.has(u[1]);
+    const passT  = !SEL.T.size  || SEL.T.has(u[2]);
+    const passM  = !SEL.M.size  || SEL.M.has(u[3]);
+    const passC  = !SEL.C.size  || SEL.C.has(u[4]);
+    const passMO = !SEL.MO.size || SEL.MO.has(u[5]);
+
+    // Para cada campo: pasa si todos los OTROS campos pasan
+    if(passE&&passT&&passM&&passC&&passMO) avail.D.add(u[0]);
+    if(passD&&passT&&passM&&passC&&passMO) avail.E.add(u[1]);
+    if(passD&&passE&&passM&&passC&&passMO) avail.T.add(u[2]);
+    if(passD&&passE&&passT&&passC&&passMO) avail.M.add(u[3]);
+    if(passD&&passE&&passT&&passM&&passMO) avail.C.add(u[4]);
+    if(passD&&passE&&passT&&passM&&passC)  avail.MO.add(u[5]);
+  }
+
+  // Renderizar cada dropdown con sus disponibles
+  const COL_TO_INV = {0:0, 2:1, 3:2, 4:3, 5:4};
+  for(const {key, ddId, msId, col} of DD_CFG){
     const el=$(ddId); if(!el) continue;
-    const skipU = getActiveUnits(key);
-    // Valores disponibles = los que tienen al menos 1 unidad activa (sin este filtro)
-    const avail = new Set(skipU.map(ui=>UNITS[ui][col]));
-    // Todos los valores del vocabulario
-    const COL_TO_INV = {0:0, 2:1, 3:2, 4:3, 5:4};
-    const allVals = INV[COL_TO_INV[col]];
-    // Solo mostrar disponibles (+ seleccionados aunque no disponibles)
-    const toShow = allVals.map((v,i)=>{return {v,i}}).filter(o=>avail.has(o.i)||SEL[key].has(o.i));
-    el.innerHTML = toShow.map(o=>{
-      const isSel = SEL[key].has(o.i);
-      const isAvail = avail.has(o.i);
-      const cls = (!isAvail&&isSel) ? ' class="unavail"' : '';
-      return `<label${cls}><input type="checkbox" value="${o.i}"${isSel?' checked':''} onchange="handleDD('${key}',this,true)"> ${o.v}</label>`;
-    }).join('');
-    // Actualizar multiselect label
-    const msEl=$(DD_CFG.find(d=>d.key===key).msId);
-    if(SEL[key].size) {
-      msEl.textContent=[...SEL[key]].map(i=>INV[col-1][i]).join(', ');
+    const availSet = avail[key];
+    const allVals  = INV[COL_TO_INV[col]];
+    // Solo mostrar disponibles + seleccionados aunque no disponibles
+    const html = [];
+    for(let i=0; i<allVals.length; i++){
+      const isAvail = availSet.has(i);
+      const isSel   = SEL[key].has(i);
+      if(!isAvail && !isSel) continue;  // no mostrar
+      const cls = (!isAvail && isSel) ? ' class="unavail"' : '';
+      html.push(`<label${cls}><input type="checkbox" value="${i}"${isSel?' checked':''} onchange="handleDD('${key}',this,true)"> ${allVals[i]}</label>`);
+    }
+    el.innerHTML = html.join('');
+    // Label multiselect
+    const msEl=$(msId);
+    if(SEL[key].size){
+      msEl.textContent = [...SEL[key]].map(i=>INV[COL_TO_INV[col]][i]).join(', ');
       msEl.classList.add('has-sel');
     } else {
       msEl.textContent='Todos...'; msEl.classList.remove('has-sel');
     }
   }
 
-  // AÑO y MES
+  // AÑO y MES — pasada simple sobre FECHAS (solo 769 fechas)
   for(const {key, msId, ddId} of [
-    {key:'AÑO',msId:'msAÑO',ddId:'optsAÑO'},
-    {key:'MES',msId:'msMES',ddId:'optsMES'}
+    {key:'AÑO', msId:'msAÑO', ddId:'optsAÑO'},
+    {key:'MES', msId:'msMES',      ddId:'optsMES'}
   ]){
     const el=$(ddId); if(!el) continue;
-    const activeFi = getActiveFechas(key);
-    const activeU  = getActiveUnits();
-    // Solo fechas con datos en unidades activas
-    const availFi  = activeFi.filter(fi=>activeU.some(ui=>U_MAP.has(ui*nF+fi)));
+    // Fechas activas ignorando este campo
+    const valSet = new Set();
+    for(let fi=0; fi<nF; fi++){
+      const f=FECHAS[fi];
+      if(sd && f<sd) continue;
+      if(ed && f>ed) continue;
+      if(key!=='AÑO' && SEL.AÑO.size && !SEL.AÑO.has(getAño(f))) continue;
+      if(key!=='MES' && SEL.MES.size && !SEL.MES.has(getMes(f)))  continue;
+      valSet.add(key==='AÑO' ? getAño(f) : getMes(f));
+    }
     const vals = key==='AÑO'
-      ? [...new Set(availFi.map(fi=>getAño(FECHAS[fi])))].filter(Boolean).sort()
-      : MESES_NOM.filter(m=>availFi.some(fi=>getMes(FECHAS[fi])===m));
+      ? [...valSet].filter(Boolean).sort()
+      : MESES_NOM.filter(m=>valSet.has(m));
     el.innerHTML = vals.map(v=>
       `<label><input type="checkbox" value="${v}"${SEL[key].has(v)?' checked':''} onchange="handleDD('${key}',this,false)"> ${v}</label>`
     ).join('');
@@ -315,17 +340,15 @@ function updateAllDropdowns(){
     else { msEl.textContent='Todos...'; msEl.classList.remove('has-sel'); }
   }
 
-  // ECONÓMICO
-  const skipU = getActiveUnits('E');
-  const availEcos = new Set(skipU.map(ui=>UNITS[ui][1]).filter(Boolean));
-  _availEcos = [...availEcos].sort((a,b)=>+a-+b);
+  // ECONÓMICO — ya tenemos avail.E de la pasada única
+  _availEcos = [...avail.E].filter(Boolean).sort((a,b)=>+a-+b);
   const q = $('searchECO') ? $('searchECO').value.trim() : '';
   filtrarEco(q);
-  // Label económico
   const msEco=$('msECONOMICO');
   if(SEL.E.size){ msEco.textContent=[...SEL.E].join(', '); msEco.classList.add('has-sel'); }
   else { msEco.textContent='Todos...'; msEco.classList.remove('has-sel'); }
 }
+
 
 let _allEcos=[], _availEcos=[];
 function renderEcos(opts){

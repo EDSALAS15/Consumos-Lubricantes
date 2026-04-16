@@ -274,7 +274,8 @@ function updateAllDropdowns(){
     // Valores disponibles = los que tienen al menos 1 unidad activa (sin este filtro)
     const avail = new Set(skipU.map(ui=>UNITS[ui][col]));
     // Todos los valores del vocabulario
-    const allVals = INV[col-1];  // col 0→INV[0], col2→INV[1], col3→INV[2], col4→INV[3], col5→INV[4]
+    const COL_TO_INV = {0:0, 2:1, 3:2, 4:3, 5:4};
+    const allVals = INV[COL_TO_INV[col]];
     // Solo mostrar disponibles (+ seleccionados aunque no disponibles)
     const toShow = allVals.map((v,i)=>{return {v,i}}).filter(o=>avail.has(o.i)||SEL[key].has(o.i));
     el.innerHTML = toShow.map(o=>{

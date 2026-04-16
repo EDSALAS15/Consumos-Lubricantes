@@ -107,8 +107,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 .bm{background:#2176AE;color:#fff;border-radius:2px;padding:1px 4px;font-size:8px;font-weight:700;display:inline-block}
 .bE{background:#8B0000;color:#fff;border-radius:2px;padding:1px 4px;font-size:8px;font-weight:700;display:inline-block}
 #loadingMsg{text-align:center;padding:60px 40px;color:#666;font-size:14px}
-.progress-bar{width:300px;height:6px;background:#eee;border-radius:3px;margin:12px auto 0;overflow:hidden}
-.progress-fill{height:100%;background:var(--rojo);border-radius:3px;width:0%;transition:width .3s}
+
 </style>
 </head>
 <body>
@@ -129,11 +128,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
   </nav>
   <div class="content-area">
     <div class="card">
-      <div id="loadingMsg">
-        <div>&#9881;&#65039; Preparando datos...</div>
-        <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
-        <div id="progTxt" style="font-size:11px;color:#999;margin-top:6px"></div>
-      </div>
+      <div id="loadingMsg">&#9203; Cargando datos...</div>
       <div id="mainUI" style="display:none">
         <div class="filters-wrap">
           <div class="filters-row">
@@ -523,30 +518,15 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
   });
 
-  // Inicialización progresiva (no bloquea el hilo principal)
-  const prog=$('progFill'), progTxt=$('progTxt');
-  function setProgress(pct,txt){ prog.style.width=pct+'%'; if(progTxt) progTxt.textContent=txt; }
-
-  setProgress(10,'Preparando índices...');
-  setTimeout(()=>{
-    _allEcos=[...new Set(UNITS.map(u=>u[1]).filter(Boolean))].sort((a,b)=>+a-+b);
-    setProgress(40,'Configurando filtros...');
-    setTimeout(()=>{
-      const r=rangoUltimos3(); sd=r.sd; ed=r.ed;
-      $('dStart').value=sd; $('dEnd').value=ed;
-      setProgress(70,'Calculando opciones...');
-      setTimeout(()=>{
-        _availEcos=[..._allEcos];
-        updateAllDropdowns();
-        setProgress(100,'Listo');
-        setTimeout(()=>{
-          $('loadingMsg').style.display='none';
-          $('mainUI').style.display='block';
-          render();
-        },100);
-      },20);
-    },20);
-  },20);
+  // Inicialización directa
+  _allEcos=[...new Set(UNITS.map(u=>u[1]).filter(Boolean))].sort((a,b)=>+a-+b);
+  _availEcos=[..._allEcos];
+  const r=rangoUltimos3(); sd=r.sd; ed=r.ed;
+  $('dStart').value=sd; $('dEnd').value=ed;
+  updateAllDropdowns();
+  $('loadingMsg').style.display='none';
+  $('mainUI').style.display='block';
+  render();
 });
 </script>
 </body>

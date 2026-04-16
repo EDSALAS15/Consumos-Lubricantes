@@ -308,13 +308,17 @@ function updateAllDropdowns(){
 }
 
 function renderDD(el, key, allVals, selected, available=null){
-  // available=null → todos disponibles; available=Set → solo esos activos
-  el.innerHTML = allVals.map(o=>{
+  // Si available es un Set, solo mostrar las opciones disponibles
+  // (más las ya seleccionadas aunque no estén disponibles, para no perder el estado)
+  const toShow = available===null
+    ? allVals
+    : allVals.filter(o => available.has(o) || selected.has(o));
+  el.innerHTML = toShow.map(o=>{
     const isAvail = available===null || available.has(o);
     const isSel   = selected.has(o);
-    const cls     = isAvail ? '' : ' class="unavail"';
-    const dis     = isAvail ? '' : ' disabled';
-    return `<label${cls}><input type="checkbox" value="${o}"${isSel?' checked':''}${dis} onchange="handleDD('${key}',this)"> ${o}</label>`;
+    // Si está seleccionada pero ya no disponible, mostrarla tachada
+    const cls     = (!isAvail && isSel) ? ' class="unavail"' : '';
+    return `<label${cls}><input type="checkbox" value="${o}"${isSel?' checked':''} onchange="handleDD('${key}',this)"> ${o}</label>`;
   }).join('');
 }
 

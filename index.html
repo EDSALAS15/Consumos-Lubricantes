@@ -484,9 +484,9 @@ async function cargarExcel(){
     procesarDatos(rows);
 
     sub.textContent=`✓ ${rows.length.toLocaleString('es-MX')} registros · ${nU.toLocaleString('es-MX')} unidades`;
-    buildFilters();
     $('loadingOverlay').style.display='none';
     $('mainUI').style.display='block';
+    buildFilters();
     render();
 
   }catch(err){
@@ -601,11 +601,12 @@ function buildDD(field, opts){
 // ── Económico con buscador ───────────────────────────────────────
 let _allEcos = [];
 function renderEcos(opts){
-  $('listaECONOMICO').innerHTML = opts.map(o=>
+  const el=$('listaECONOMICO'); if(!el) return;
+  el.innerHTML = opts.map(o=>
     `<label><input type="checkbox" value="${o}" onchange="handleFilterEco()"> ${o}</label>`
   ).join('');
   const sel = new Set(filters.ECONOMICO);
-  $('listaECONOMICO').querySelectorAll('input').forEach(cb=>{ if(sel.has(cb.value)) cb.checked=true; });
+  el.querySelectorAll('input').forEach(cb=>{ if(sel.has(cb.value)) cb.checked=true; });
 }
 function filtrarEco(q){
   const filtrados = q.trim()==='' ? _allEcos : _allEcos.filter(o=>String(o).includes(q.trim()));

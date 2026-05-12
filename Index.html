@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CONSUMOS DE LUBRICANTES</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+
+:root{
+  --rojo:#C10230; --gris:#F4F4F4; --azul:#0071C1;
+  --side-w:220px; --side-bg:#333F48; --side-grp:#263038; --side-txt:#ccc;
+  --col-total:#333F48;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Segoe UI",Tahoma,sans-serif;background:var(--gris);display:flex;flex-direction:column;min-height:100vh}
+
+/* ── HEADER ─────────────────────────────────────── */
+.header-bar{display:flex;align-items:stretch;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.header-logo{width:var(--side-w);background:#fefefe;display:flex;align-items:center;justify-content:center;padding:10px 16px;flex-shrink:0}
+.header-logo img{height:42px;object-fit:contain;width:100%}
+.header-title{flex:1;background:#E4002B;color:#fff;display:flex;align-items:center;justify-content:center;padding:14px 24px}
+.header-title h2{margin:0;font-size:16px;letter-spacing:.5px;text-transform:uppercase}
+
+/* ── LAYOUT ─────────────────────────────────────── */
+.app-body{display:flex;flex:1}
+.sidebar{width:var(--side-w);background:var(--side-bg);min-height:calc(100vh - 64px);flex-shrink:0;overflow-y:auto}
+.content-area{flex:1;padding:20px;overflow-x:hidden;min-width:0}
+.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 5px 20px rgba(0,0,0,.12)}
+
+/* ── SIDEBAR ─────────────────────────────────────── */
+.nav-group{border-bottom:1px solid #3a4a55}
+.nav-group-header{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--side-grp);user-select:none}
+.nav-group-header:hover{background:#3a4a55}
+.nav-group-header.open{color:#E4002B}
+.arrow{font-size:9px;transition:transform .2s}
+.nav-group-header.open .arrow{transform:rotate(90deg)}
+.nav-children{display:none}
+.nav-children.open{display:block}
+.tab-btn{display:block;width:100%;padding:10px 16px 10px 22px;cursor:pointer;border:none;border-left:3px solid transparent;background:transparent;color:var(--side-txt);font-size:10.5px;font-weight:600;text-align:left;transition:all .15s}
+.tab-btn:hover{background:#3e4d58;color:#fff}
+.tab-btn.active{background:rgba(193,2,48,.18)!important;color:#fff!important;border-left-color:var(--rojo)!important}
+
+/* ── FILTROS ─────────────────────────────────────── */
+.filters-wrap{background:#f9f9f9;padding:8px;border-radius:8px;margin-bottom:12px;border:1px solid #eee;display:flex;flex-direction:column;gap:6px}
+.filters-row{display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end}
+.filters-row+.filters-row{padding-top:6px;border-top:1px solid #e0e0e0}
+.f-item{display:flex;flex-direction:row;align-items:center;gap:4px;position:relative}
+.f-item label{font-size:8px;font-weight:700;color:#666;white-space:nowrap;text-transform:uppercase}
+.multiselect{padding:1px 5px;border-radius:3px;border:1px solid #ccc;font-size:9px;height:20px;cursor:pointer;background:#fff;min-width:90px;max-width:150px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* Dropdown genérico */
+.dropdown-content{
+  display:none;position:absolute;top:100%;left:0;
+  background:#fff;border:1px solid #ccc;
+  z-index:300;
+  box-shadow:0 4px 8px rgba(0,0,0,.15);
+  min-width:150px;border-radius:3px;
+  max-height:200px;
+  overflow-x:hidden;
+  overflow-y:scroll;
+  scrollbar-width:thin;
+  scrollbar-color:#999 #f0f0f0;
+  padding:4px;
+}
+.dropdown-content::-webkit-scrollbar{width:5px}
+.dropdown-content::-webkit-scrollbar-track{background:#f0f0f0}
+.dropdown-content::-webkit-scrollbar-thumb{background:#aaa;border-radius:3px}
+.dropdown-content.open{display:block}
+.dropdown-content label{display:flex;align-items:center;gap:6px;padding:4px 5px;cursor:pointer;font-weight:400;font-size:10px;color:#333;white-space:nowrap}
+/* ── Dropdown ECONÓMICO con buscador sticky ── */
+.dropdown-eco{
+  display:none;
+  position:absolute;top:100%;left:0;
+  background:#fff;
+  border:1px solid #ccc;
+  border-radius:3px;
+  z-index:300;
+  box-shadow:0 4px 12px rgba(0,0,0,.2);
+  min-width:170px;
+  flex-direction:column;
+}
+.dropdown-eco.open{display:flex}
+.dd-search-wrap{
+  flex-shrink:0;           /* NUNCA se encoge */
+  background:#fff;
+  padding:5px;
+  border-bottom:1px solid #ddd;
+}
+.dd-search{
+  display:block;width:100%;
+  padding:3px 7px;
+  border:1px solid #bbb;border-radius:3px;
+  font-size:10px;outline:none;box-sizing:border-box;
+}
+.dd-search:focus{border-color:#0071C1}
+.dd-lista{
+  overflow-y:auto;   /* ÚNICO scroll — solo aquí */
+  max-height:165px;
+  padding:4px;
+}
+.dd-lista label{display:flex;align-items:center;gap:6px;padding:4px 5px;cursor:pointer;font-weight:400;font-size:10px;color:#333;white-space:nowrap}
+
+input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-size:9px;height:20px}
+.btn-clear{background:var(--rojo);color:#fff;border:none;padding:2px 10px;cursor:pointer;border-radius:3px;font-size:9px;font-weight:700;height:20px;white-space:nowrap}
+.btn-clear:hover{opacity:.85}
+.btn-special{border:none;padding:3px 9px;cursor:pointer;border-radius:3px;font-size:9px;font-weight:700;height:20px;color:#fff;white-space:nowrap}
+.btn-special:hover{opacity:.85}
+.btn-mayor{background:#FF6B00}
+.btn-menor{background:#2176AE}
+.btn-excede{background:#8B0000}
+.btn-active{box-shadow:inset 0 2px 4px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.5)}
+
+/* ── KPI ─────────────────────────────────────────── */
+.kpi-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.kpi-card{flex:1;min-width:110px;background:#f9f9f9;border:1px solid #e8e8e8;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.kpi-label{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#999}
+.kpi-value{font-size:20px;font-weight:800;color:#333F48;margin:4px 0}
+.kpi-sub{font-size:9px;color:#888}
+
+/* ── TOOLBAR ─────────────────────────────────────── */
+.tabla-toolbar{display:flex;align-items:center;justify-content:space-between;background:#333F48;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;border-radius:8px 8px 0 0;gap:8px;flex-wrap:wrap}
+.btn-dl{background:#00882B;color:#fff;border:none;padding:4px 14px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:700}
+.btn-dl:hover{background:#006820}
+
+/* ── AVISO RANGO ─────────────────────────────────── */
+.aviso-wrap{border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px}
+.aviso-rango{background:#fff3cd;border-radius:0 0 8px 8px;padding:22px 24px;display:flex;gap:16px;align-items:flex-start}
+.aviso-icono{font-size:26px;flex-shrink:0}
+.aviso-texto strong{font-size:13px;color:#7a4f00;display:block;margin-bottom:5px}
+.aviso-texto p{font-size:11.5px;color:#6d4000;margin-bottom:10px;line-height:1.5}
+.aviso-chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:#fff;border:1px solid #c8a030;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;color:#7a4f00;cursor:pointer;transition:all .15s}
+.chip:hover{background:#7a4f00;color:#fff}
+
+/* ── TABLA PIVOTE ────────────────────────────────── */
+.tabla-scroll{
+  overflow-x:auto;
+  overflow-y:auto;
+  max-height:500px;
+  border-radius:0 0 8px 8px;
+  border:1px solid #ddd;
+  border-top:none;
+  border-left:none;   /* quitar borde izq — la col DIVISIÓN lo tapa */
+}
+#tbl{
+  border-collapse:collapse;
+  border-spacing:0;
+  font-size:9.5px;
+  min-width:100%;
+}
+
+/* Encabezado */
+#tbl thead th{
+  background:#333F48;color:#fff;
+  padding:4px 5px;
+  text-align:center;white-space:nowrap;
+  font-size:8.5px;font-weight:700;
+  position:sticky;top:0;z-index:3;
+  border:none;
+  /* Separador lateral con box-shadow — NO se vuelve transparente en sticky */
+  box-shadow:inset -1px 0 0 #4a5a68, inset 0 -1px 0 #4a5a68;
+}
+#tbl thead th.th-info{
+  text-align:left;
+  min-width:50px;max-width:95px;
+  box-shadow:inset -1px 0 0 #4a5a68, inset 0 -1px 0 #4a5a68;
+}
+#tbl thead th.th-mes{
+  background:#1e2e3a;
+  font-size:8px;letter-spacing:.3px;text-transform:uppercase;
+  box-shadow:inset -1px 0 0 #2a3e4e, inset 0 -1px 0 #2a3e4e;
+}
+#tbl thead th.th-fecha{
+  min-width:28px;max-width:36px;
+  background:#2B3A4A;
+  font-size:8px;padding:4px 2px;
+  box-shadow:inset -1px 0 0 #3a4e5e, inset 0 -1px 0 #3a4e5e;
+}
+#tbl thead th.th-total{
+  background:var(--col-total);
+  color:#fff;
+  min-width:52px;font-weight:800;
+  position:sticky;right:0;z-index:4;
+  border-left:2px solid #222d35;
+}
+
+/* ── PRIMERA COLUMNA STICKY (DIVISIÓN) ────────────
+   position:sticky;left:0 para que se ancle al borde
+   izquierdo y tape el border del contenedor         */
+#tbl thead th.th-info:first-child{
+  position:sticky;
+  left:0;
+  z-index:10;               /* encima de todo */
+  border-left:none;
+  background:#333F48;       /* mismo fondo que thead */
+}
+#tbl tbody td.td-info:first-child{
+  position:sticky;
+  left:0;
+  z-index:2;
+  border-left:none;         /* sin borde izquierdo visible */
+}
+/* Fondos explícitos para que la celda sticky tape el scroll */
+#tbl tbody tr.row-par  td.td-info:first-child{background:#eef1f6}
+#tbl tbody tr.row-impar td.td-info:first-child{background:#f8f9fb}
+#tbl tbody tr:hover    td.td-info:first-child{background:#c8d9ef!important}
+
+/* Cuerpo general */
+#tbl tbody td{
+  padding:3px 5px;
+  border-bottom:1px solid #e8e8e8;
+  border-right:1px solid #ececec;
+  text-align:center;white-space:nowrap;
+  font-size:9.5px;
+}
+#tbl tbody td.td-info{
+  text-align:left;font-weight:600;font-size:9px;color:#333;
+  max-width:95px;overflow:hidden;text-overflow:ellipsis;
+}
+/* Columna TOTAL siempre en #333F48 */
+#tbl tbody td.td-total{
+  background:var(--col-total)!important;
+  color:#fff!important;
+  font-weight:800;font-size:10px;
+  position:sticky;right:0;z-index:2;
+  border-left:2px solid #222d35;
+}
+#tbl thead th.th-total:first-child,
+#tbl thead th.th-info:first-child{border-left:none}
+
+#tbl tbody td.td-dash{color:#ddd;font-size:11px}
+
+/* Bandas alternas */
+#tbl tbody tr.row-par  td{background:#f5f7fa}
+#tbl tbody tr.row-par  td.td-info{background:#eef1f6}
+#tbl tbody tr.row-impar td{background:#fff}
+#tbl tbody tr.row-impar td.td-info{background:#f8f9fb}
+/* Hover */
+#tbl tbody tr:hover td{background:#dce9fb!important}
+#tbl tbody tr:hover td.td-total{background:#253040!important;color:#fff!important}
+#tbl tbody tr:hover td.td-info{background:#c8d9ef!important}
+
+/* Badges */
+.badge-mayor{background:#FF6B00;color:#fff;border-radius:2px;padding:1px 4px;font-size:8px;font-weight:700;display:inline-block}
+.badge-menor{background:#2176AE;color:#fff;border-radius:2px;padding:1px 4px;font-size:8px;font-weight:700;display:inline-block}
+.badge-excede{background:#8B0000;color:#fff;border-radius:2px;padding:1px 4px;font-size:8px;font-weight:700;display:inline-block}
+
+/* Scrollbar visible pero integrada al diseño */
+.tabla-scroll::-webkit-scrollbar{width:10px;height:10px}
+.tabla-scroll::-webkit-scrollbar-track{background:#f0f0f0}
+.tabla-scroll::-webkit-scrollbar-thumb{background:#333F48;border-radius:4px;border:2px solid #f0f0f0}
+.tabla-scroll::-webkit-scrollbar-thumb:hover{background:#C10230}
+.tabla-scroll::-webkit-scrollbar-corner{background:#f0f0f0}
+/* Firefox */
+.tabla-scroll{scrollbar-width:thin;scrollbar-color:#333F48 #f0f0f0}
+#loadingMsg{text-align:center;padding:40px;color:#666;font-size:14px}
+
+
+/* ── Carga dinámica ───────────────────────────────── */
+#loadingOverlay{
+  position:fixed;inset:0;background:rgba(255,255,255,.95);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:9999;gap:16px;
+}
+.spinner{
+  width:48px;height:48px;border:5px solid #eee;
+  border-top-color:#C10230;border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-txt{font-size:13px;color:#666;font-family:"Segoe UI",sans-serif}
+.load-sub{font-size:11px;color:#999;font-family:"Segoe UI",sans-serif}
+.load-err{font-size:13px;color:#C10230;font-weight:700;text-align:center;max-width:400px;line-height:1.5}
+
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="load-txt">Cargando datos del Excel...</div>
+  <div class="load-sub" id="loadSub">Conectando con GitHub...</div>
+</div>
+
+<div class="header-bar">
+  <div class="header-logo"><img src="data:image/png;base64,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QZcSew5V0kVqrRVXc9BoHEVfRJTlRhGXNjOc93hhooW/Z1rhj+B2lrrxf5dy51Jsl2iVRb6PSte0Hte0MHzIV5kVj1OPieol6Sr1r2aMV9fyRRu26DumitO15vlNHBX1k4PC14cRG0cgSPEuKldEWVCChHlR4TUb+rqNzO5rfql4beAREUjCOt1OLgdOXIWmMSXA0sgpmlwaDJwnh5nq54VLq/ZHtFpZH8elq14H1osPHyKvGis1aCq4yz0ugcT3GiRnGjCMubGc5z0+DKFjZ3rgv4Bpa68X+Xd/RdlRbINo1W9rWaXrIwfrS8LAPiVeJFZVnHxPRT9JV617NGK+r/dGi7C9JVWjNnlLargxsdc+WSepa1wcA5xwBkf4Q1b0iLLjFRWEeBvLqpeV53FT9Um2/mERFUxgiIgCIiAIiIDKLGUygMosZTKAFERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAf/9k=" alt="Senda Citi"></div>
+  <div class="header-title"><h2>CONSUMOS DE LUBRICANTES</h2></div>
+</div>
+
+<div class="app-body">
+  <nav class="sidebar">
+    <div class="nav-group" id="grp1">
+      <div class="nav-group-header open" onclick="toggleGroup('grp1')">
+        <span>LUBRICANTES</span><span class="arrow">&#9654;</span>
+      </div>
+      <div class="nav-children open" id="children-grp1">
+        <button class="tab-btn active" onclick="setVista(this)">HISTORIAL DE CONSUMOS</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="content-area">
+    <div class="card">
+      <div id="loadingMsg">&#9203; Cargando datos...</div>
+      <div id="mainUI" style="display:none">
+
+        <!-- FILTROS -->
+        <div class="filters-wrap">
+          <!-- Fila 1 -->
+          <div class="filters-row">
+            <div class="f-item"><label>A&#209;O</label><div class="multiselect" id="msA&#209;O">Todos...</div><div class="dropdown-content" id="optsA&#209;O"></div></div>
+            <div class="f-item"><label>MES</label><div class="multiselect" id="msMES">Todos...</div><div class="dropdown-content" id="optsMES"></div></div>
+            <div class="f-item"><label>DESDE</label><input type="date" id="dStart" onchange="applyFilters()"></div>
+            <div class="f-item"><label>HASTA</label><input type="date" id="dEnd" onchange="applyFilters()"></div>
+            <div class="f-item"><button class="btn-clear" onclick="resetAll()">LIMPIAR FILTROS</button></div>
+          </div>
+          <!-- Fila 2 -->
+          <div class="filters-row">
+            <div class="f-item"><label>DIVISI&#211;N</label><div class="multiselect" id="msDIVISION">Todos...</div><div class="dropdown-content" id="optsDIVISION"></div></div>
+            <div class="f-item"><label>TIPO</label><div class="multiselect" id="msTIPO">Todos...</div><div class="dropdown-content" id="optsTIPO"></div></div>
+            <div class="f-item"><label>MARCA</label><div class="multiselect" id="msMARCA">Todos...</div><div class="dropdown-content" id="optsMARCA"></div></div>
+            <div class="f-item"><label>CARROCER&#205;A</label><div class="multiselect" id="msCARROCERIA">Todos...</div><div class="dropdown-content" id="optsCARROCERIA"></div></div>
+            <div class="f-item"><label>MOTOR</label><div class="multiselect" id="msMOTOR">Todos...</div><div class="dropdown-content" id="optsMOTOR"></div></div>
+          </div>
+          <!-- Fila 3 -->
+          <div class="filters-row">
+            <div class="f-item">
+              <label>ECON&#211;MICO</label>
+              <div class="multiselect" id="msECONOMICO">Todos...</div>
+              <!-- dropdown-eco: buscador fijo + lista con su propio scroll -->
+              <div class="dropdown-eco" id="optsECONOMICO">
+                <div class="dd-search-wrap">
+                  <input class="dd-search" id="searchECONOMICO" type="text"
+                    placeholder="&#128269; Buscar econ&#243;mico..."
+                    oninput="filtrarEco(this.value)"
+                    onclick="event.stopPropagation()">
+                </div>
+                <div class="dd-lista" id="listaECONOMICO"></div>
+              </div>
+            </div>
+            <div class="f-item" style="margin-left:8px">
+              <button class="btn-special btn-menor" id="btnMenor" onclick="toggleMenor()">&#128309; MENOR CONSUMO (&lt;16 L)</button>
+            </div>
+            <div class="f-item">
+              <button class="btn-special btn-mayor" id="btnMayor" onclick="toggleMayor()">&#128308; MAYOR CONSUMO (&gt;16 L)</button>
+            </div>
+            <div class="f-item">
+              <button class="btn-special btn-excede" id="btnExcede" onclick="toggleExcede()">&#9888;&#65039; EXCEDE CAPACIDAD</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-row">
+          <div class="kpi-card"><div class="kpi-label">Total Registros</div><div class="kpi-value" id="kpi1">&#8211;</div><div class="kpi-sub">filas visibles</div></div>
+          <div class="kpi-card"><div class="kpi-label">Total Litros</div><div class="kpi-value" id="kpi2">&#8211;</div><div class="kpi-sub">suma CANTIDAD</div></div>
+          <div class="kpi-card"><div class="kpi-label">Promedio Litros</div><div class="kpi-value" id="kpi3">&#8211;</div><div class="kpi-sub">por consumo</div></div>
+          <div class="kpi-card"><div class="kpi-label">Mayor Consumo</div><div class="kpi-value" id="kpi4">&#8211;</div><div class="kpi-sub">m&#225;x. individual</div></div>
+          <div class="kpi-card"><div class="kpi-label">Exceden Capacidad</div><div class="kpi-value" id="kpi5" style="color:#8B0000">&#8211;</div><div class="kpi-sub">registros</div></div>
+          <div class="kpi-card"><div class="kpi-label">Unidades</div><div class="kpi-value" id="kpi6">&#8211;</div><div class="kpi-sub">econ&#243;micos &#250;nicos</div></div>
+        </div>
+
+        <!-- Toolbar + Tabla -->
+        <div class="tabla-toolbar">
+          <span>&#128203; HISTORIAL DE CONSUMOS &nbsp;<span id="rangoLabel" style="font-size:9px;font-weight:400;opacity:.8"></span></span>
+          <button class="btn-dl" onclick="descargarExcel()">&#11015; Descargar Excel</button>
+        </div>
+        <div id="tablaContainer"></div>
+        <div id="tblInfo" style="font-size:10px;color:#888;padding:5px 8px;text-align:right"></div>
+
+      </div><!-- /mainUI -->
+    </div>
+  </div>
+</div>
+<script>
+
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN — cambia solo esta URL cuando mueva el archivo
+// ══════════════════════════════════════════════════════════════════
+const EXCEL_URL =
+  'https://raw.githubusercontent.com/edsalas15/Consumos-Lubricantes/main/Consumosdeaceites.xlsx';
+// ──────────────────────────────────────────────────────────────────
+
+let RAW_DATA = [];
+
+async function cargarExcel() {
+  const sub = document.getElementById('loadSub');
+  try {
+    sub.textContent = 'Descargando archivo Excel...';
+    const resp = await fetch(EXCEL_URL);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+
+    sub.textContent = 'Procesando datos...';
+    const arrayBuffer = await resp.arrayBuffer();
+    const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, {raw:false, dateNF:'yyyy-mm-dd'});
+
+    // Normalizar campos igual que el original
+    RAW_DATA = raw.map(r => ({
+      'DIVISION':          (r['DIVISION']||'').trim().toUpperCase() === 'VICTORIA'
+                            ? 'VICTORIA' : (r['DIVISION']||''),
+      'ECONOMICO':         String(r['ECONOMICO']||'').replace(/\.0$/,''),
+      'TIPO':              r['TIPO']||'',
+      'MARCA DE UNIDAD':   r['MARCA DE UNIDAD']||'',
+      'TIPO DE CARROCERIA':r['TIPO DE CARROCERIA']||'',
+      'MOTOR':             r['MOTOR']||'',
+      'CAPACIDAD LTS':     r['CAPACIDAD LTS']!=null ? r['CAPACIDAD LTS'] : '',
+      'FECHA CONSUMO':     (r['FECHA CONSUMO']||'').substring(0,10),
+      'CANTIDAD':          Number(r['CANTIDAD']||0),
+    })).filter(r => r['FECHA CONSUMO'] && r['CANTIDAD'] != null);
+
+    sub.textContent = `${RAW_DATA.length.toLocaleString('es-MX')} registros cargados`;
+
+    // Inicializar app
+    buildFilters();
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('mainUI').style.display = 'block';
+    render();
+
+  } catch(err) {
+    console.error('Error cargando Excel:', err);
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.querySelector('.spinner').style.display = 'none';
+    overlay.querySelector('.load-txt').style.display = 'none';
+    sub.style.display = 'none';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'load-err';
+    errDiv.innerHTML = `
+      &#9888;&#65039; No se pudo cargar el archivo Excel.<br><br>
+      <small>${err.message}</small><br><br>
+      Verifica que la URL del archivo sea correcta y que el repositorio sea público.<br><br>
+      <button onclick="cargarExcel()" style="background:#C10230;color:#fff;border:none;
+        padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">
+        &#8635; Reintentar
+      </button>`;
+    overlay.appendChild(errDiv);
+  }
+}
+
+// Arrancar cuando cargue la página
+window.addEventListener('DOMContentLoaded', () => {
+  // Configurar dropdowns
+  document.querySelectorAll('.multiselect').forEach(ms => {
+    ms.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const dd = ms.nextElementSibling;
+      const was = dd.classList.contains('open');
+      document.querySelectorAll('.dropdown-content,.dropdown-eco')
+        .forEach(d => d.classList.remove('open'));
+      if(!was) dd.classList.add('open');
+    });
+  });
+  document.addEventListener('click', () =>
+    document.querySelectorAll('.dropdown-content,.dropdown-eco')
+      .forEach(d => d.classList.remove('open'))
+  );
+  cargarExcel();
+});
+
+
+// ══════════════════════════════════════════════════════════════════
+// LÓGICA DE LA APP — idéntica al original
+// (RAW_DATA se llena dinámicamente desde el Excel de GitHub)
+// ══════════════════════════════════════════════════════════════════
+// ── Estado ───────────────────────────────────────────────────────
+const filters = {
+  'AÑO':[], MES:[], DIVISION:[], TIPO:[], MARCA:[], CARROCERIA:[], MOTOR:[], ECONOMICO:[],
+  sd:'', ed:''
+};
+let mayorActivo=false, menorActivo=false, excedeActivo=false;
+const MAX_MESES = 3;
+const MESES_NOM   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+const $   = id => document.getElementById(id);
+const getMes = s => s ? MESES_NOM[parseInt(s.substring(5,7))-1]||'' : '';
+const getAño = s => s ? s.substring(0,4) : '';
+const mesLabel = ym => { const [y,m]=ym.split('-'); return MESES_CORTO[parseInt(m)-1]+' '+y; };
+const mesesDistintos = arr => new Set(arr.map(f=>f.substring(0,7))).size;
+
+function rangoUltimosNMeses(n){
+  const all = RAW_DATA.map(d=>d['FECHA CONSUMO']).filter(Boolean).sort();
+  if(!all.length) return {sd:'',ed:''};
+  const ultima = all[all.length-1];
+  let [ay,am] = ultima.substring(0,7).split('-').map(Number);
+  let iniM=am-(n-1), iniY=ay;
+  while(iniM<1){iniM+=12;iniY--;}
+  return {sd:`${iniY}-${String(iniM).padStart(2,'0')}-01`, ed:ultima};
+}
+
+// ── Sidebar ──────────────────────────────────────────────────────
+function toggleGroup(id){
+  document.querySelector('#'+id+' .nav-group-header').classList.toggle('open');
+  $('children-'+id).classList.toggle('open');
+}
+function setVista(btn){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── Dropdowns genéricos ──────────────────────────────────────────
+function buildFilters(){
+  buildDD('AÑO',       [...new Set(RAW_DATA.map(d=>getAño(d['FECHA CONSUMO'])))].filter(Boolean).sort());
+  buildDD('MES',       MESES_NOM.filter(m=>RAW_DATA.some(d=>getMes(d['FECHA CONSUMO'])===m)));
+  buildDD('DIVISION',  [...new Set(RAW_DATA.map(d=>d.DIVISION))].filter(Boolean).sort());
+  buildDD('TIPO',      [...new Set(RAW_DATA.map(d=>d.TIPO))].filter(Boolean).sort());
+  buildDD('MARCA',     [...new Set(RAW_DATA.map(d=>d['MARCA DE UNIDAD']))].filter(Boolean).sort());
+  buildDD('CARROCERIA',[...new Set(RAW_DATA.map(d=>d['TIPO DE CARROCERIA']))].filter(Boolean).sort());
+  buildDD('MOTOR',     [...new Set(RAW_DATA.map(d=>d.MOTOR))].filter(Boolean).sort());
+  // Económico
+  _allEcos = [...new Set(RAW_DATA.map(d=>d.ECONOMICO))].filter(Boolean).sort((a,b)=>Number(a)-Number(b));
+  renderEcos(_allEcos);
+
+  const {sd,ed} = rangoUltimosNMeses(3);
+  filters.sd=sd; filters.ed=ed;
+  $('dStart').value=sd; $('dEnd').value=ed;
+}
+
+function buildDD(field, opts){
+  const el=$('opts'+field); if(!el) return;
+  el.innerHTML = opts.map(o=>
+    `<label><input type="checkbox" value="${o}" onchange="handleFilter('${field}')"> ${o}</label>`
+  ).join('');
+}
+
+// ── Económico con buscador ───────────────────────────────────────
+let _allEcos = [];
+function renderEcos(opts){
+  $('listaECONOMICO').innerHTML = opts.map(o=>
+    `<label><input type="checkbox" value="${o}" onchange="handleFilterEco()"> ${o}</label>`
+  ).join('');
+  const sel = new Set(filters.ECONOMICO);
+  $('listaECONOMICO').querySelectorAll('input').forEach(cb=>{ if(sel.has(cb.value)) cb.checked=true; });
+}
+function filtrarEco(q){
+  const filtrados = q.trim()==='' ? _allEcos : _allEcos.filter(o=>String(o).includes(q.trim()));
+  renderEcos(filtrados);
+}
+function handleFilterEco(){
+  filters.ECONOMICO = Array.from($('listaECONOMICO').querySelectorAll('input:checked')).map(i=>i.value);
+  $('msECONOMICO').textContent = filters.ECONOMICO.length ? filters.ECONOMICO.join(', ') : 'Todos...';
+  render();
+}
+
+// ── Filtros genéricos ────────────────────────────────────────────
+function handleFilter(field){
+  const cont=$('opts'+field); if(!cont) return;
+  filters[field] = Array.from(cont.querySelectorAll('input:checked')).map(i=>i.value);
+  $('ms'+field).textContent = filters[field].length ? filters[field].join(', ') : 'Todos...';
+  render();
+}
+function applyFilters(){ filters.sd=$('dStart').value; filters.ed=$('dEnd').value; render(); }
+
+function resetAll(){
+  Object.keys(filters).forEach(k=>Array.isArray(filters[k])?filters[k]=[]:filters[k]='');
+  mayorActivo=false; menorActivo=false; excedeActivo=false;
+  ['btnMayor','btnMenor','btnExcede'].forEach(id=>$(id).classList.remove('btn-active'));
+  document.querySelectorAll('.dropdown-content input[type=checkbox]').forEach(cb=>cb.checked=false);
+  ['AÑO','MES','DIVISION','TIPO','MARCA','CARROCERIA','MOTOR','ECONOMICO']
+    .forEach(f=>{ const el=$('ms'+f); if(el) el.textContent='Todos...'; });
+  if($('searchECONOMICO')) $('searchECONOMICO').value='';
+  renderEcos(_allEcos);
+  const {sd,ed}=rangoUltimosNMeses(3);
+  filters.sd=sd; filters.ed=ed;
+  $('dStart').value=sd; $('dEnd').value=ed;
+  render();
+}
+
+function toggleMayor(){
+  mayorActivo=!mayorActivo; $('btnMayor').classList.toggle('btn-active',mayorActivo);
+  if(mayorActivo){ menorActivo=false; excedeActivo=false; $('btnMenor').classList.remove('btn-active'); $('btnExcede').classList.remove('btn-active'); }
+  render();
+}
+function toggleMenor(){
+  menorActivo=!menorActivo; $('btnMenor').classList.toggle('btn-active',menorActivo);
+  if(menorActivo){ mayorActivo=false; excedeActivo=false; $('btnMayor').classList.remove('btn-active'); $('btnExcede').classList.remove('btn-active'); }
+  render();
+}
+function toggleExcede(){
+  excedeActivo=!excedeActivo; $('btnExcede').classList.toggle('btn-active',excedeActivo);
+  if(excedeActivo){ mayorActivo=false; menorActivo=false; $('btnMayor').classList.remove('btn-active'); $('btnMenor').classList.remove('btn-active'); }
+  render();
+}
+function aplicarTrimestre(sd,ed){ filters.sd=sd; filters.ed=ed; $('dStart').value=sd; $('dEnd').value=ed; render(); }
+
+// ── Filtrado ─────────────────────────────────────────────────────
+function getFiltered(){
+  return RAW_DATA.filter(d=>{
+    const f=d['FECHA CONSUMO'];
+    if(filters.sd&&f<filters.sd) return false;
+    if(filters.ed&&f>filters.ed) return false;
+    if(filters['AÑO'].length&&!filters['AÑO'].includes(getAño(f))) return false;
+    if(filters.MES.length&&!filters.MES.includes(getMes(f))) return false;
+    if(filters.DIVISION.length&&!filters.DIVISION.includes(d.DIVISION)) return false;
+    if(filters.TIPO.length&&!filters.TIPO.includes(d.TIPO)) return false;
+    if(filters.MARCA.length&&!filters.MARCA.includes(d['MARCA DE UNIDAD'])) return false;
+    if(filters.CARROCERIA.length&&!filters.CARROCERIA.includes(d['TIPO DE CARROCERIA'])) return false;
+    if(filters.MOTOR.length&&!filters.MOTOR.includes(d.MOTOR)) return false;
+    if(filters.ECONOMICO.length&&!filters.ECONOMICO.includes(d.ECONOMICO)) return false;
+    const cant=Number(d.CANTIDAD||0);
+    if(mayorActivo&&cant<=16) return false;
+    if(menorActivo&&cant>=16) return false;
+    if(excedeActivo&&cant<=Number(d['CAPACIDAD LTS']||9999)) return false;
+    return true;
+  });
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────
+function updateKPIs(data){
+  const total=data.length, suma=data.reduce((a,d)=>a+Number(d.CANTIDAD||0),0);
+  const prom=total>0?(suma/total).toFixed(1):0;
+  const maxV=total>0?Math.max(...data.map(d=>Number(d.CANTIDAD||0))):0;
+  const exceden=data.filter(d=>Number(d.CANTIDAD||0)>Number(d['CAPACIDAD LTS']||9999)).length;
+  $('kpi1').textContent=total.toLocaleString('es-MX');
+  $('kpi2').textContent=suma.toLocaleString('es-MX',{maximumFractionDigits:1});
+  $('kpi3').textContent=prom;
+  $('kpi4').textContent=maxV.toLocaleString('es-MX');
+  $('kpi5').textContent=exceden.toLocaleString('es-MX');
+  $('kpi6').textContent=new Set(data.map(d=>d.ECONOMICO)).size.toLocaleString('es-MX');
+}
+
+// ── Pivot ────────────────────────────────────────────────────────
+function rowKey(d){
+  return [d.DIVISION,d.ECONOMICO,d.TIPO,d['MARCA DE UNIDAD'],d['TIPO DE CARROCERIA'],d.MOTOR,d['CAPACIDAD LTS']].join('||');
+}
+function buildPivot(data){
+  const fechas=[...new Set(data.map(d=>d['FECHA CONSUMO']).filter(Boolean))].sort();
+  const rowMap={};
+  data.forEach(d=>{
+    const rk=rowKey(d);
+    if(!rowMap[rk]) rowMap[rk]={DIVISION:d.DIVISION,ECONOMICO:d.ECONOMICO,TIPO:d.TIPO,MARCA:d['MARCA DE UNIDAD'],CARROCERIA:d['TIPO DE CARROCERIA'],MOTOR:d.MOTOR,CAP:d['CAPACIDAD LTS'],fechaMap:{}};
+    rowMap[rk].fechaMap[d['FECHA CONSUMO']]=(rowMap[rk].fechaMap[d['FECHA CONSUMO']]||0)+Number(d.CANTIDAD||0);
+  });
+  return {rowMap,fechas};
+}
+
+function generarChipsTrimestres(){
+  const all=RAW_DATA.map(d=>d['FECHA CONSUMO']).filter(Boolean).sort();
+  if(!all.length) return [];
+  let [cy,cm]=all[0].substring(0,7).split('-').map(Number);
+  const [ey,em]=all[all.length-1].substring(0,7).split('-').map(Number);
+  const chips=[];
+  while(cy<ey||(cy===ey&&cm<=em)){
+    let em3=cm+2,ey3=cy; if(em3>12){em3-=12;ey3++;}
+    let rEy=ey3,rEm=em3; if(ey3>ey||(ey3===ey&&em3>em)){rEy=ey;rEm=em;}
+    const sd=`${cy}-${String(cm).padStart(2,'0')}-01`;
+    const ed=`${rEy}-${String(rEm).padStart(2,'0')}-${new Date(rEy,rEm,0).getDate()}`;
+    chips.push({sd,ed,label:mesLabel(`${cy}-${String(cm).padStart(2,'0')}`)+' – '+mesLabel(`${rEy}-${String(rEm).padStart(2,'0')}`)});
+    cm+=3; while(cm>12){cm-=12;cy++;} if(cy>ey||(cy===ey&&cm>em)) break;
+  }
+  return chips;
+}
+
+function renderPivot(data,fechas,rowMap){
+  const rows=Object.values(rowMap);
+  const INFO=['DIVISI&#211;N','ECO','TIPO','MARCA','CARROCER&#205;A','MOTOR','CAP.L'];
+  const mesesMap={};
+  fechas.forEach(f=>{ const ym=f.substring(0,7); if(!mesesMap[ym]) mesesMap[ym]=[]; mesesMap[ym].push(f); });
+  const yms=Object.keys(mesesMap).sort();
+
+  let r1='<tr>';
+  INFO.forEach(h=>r1+=`<th class="th-info" rowspan="2">${h}</th>`);
+  yms.forEach(ym=>r1+=`<th class="th-mes" colspan="${mesesMap[ym].length}">${mesLabel(ym)}</th>`);
+  r1+='<th class="th-total" rowspan="2">TOTAL L</th></tr>';
+
+  let r2='<tr>';
+  fechas.forEach(f=>r2+=`<th class="th-fecha">${f.split('-')[2]}</th>`);
+  r2+='</tr>';
+
+  let tbody='';
+  rows.forEach((row,idx)=>{
+    const cap=Number(row.CAP||0), banda=idx%2===0?'row-par':'row-impar';
+    let total=0;
+    let cells=`<td class="td-info">${row.DIVISION}</td><td class="td-info">${row.ECONOMICO}</td><td class="td-info">${row.TIPO}</td><td class="td-info">${row.MARCA}</td><td class="td-info">${row.CARROCERIA}</td><td class="td-info">${row.MOTOR}</td><td class="td-info">${row.CAP}</td>`;
+    fechas.forEach(f=>{
+      const v=row.fechaMap[f];
+      if(v==null){ cells+='<td class="td-dash">&#8212;</td>'; }
+      else{
+        total+=v;
+        if(cap>0&&v>cap) cells+=`<td><span class="badge-excede">${v}&#9888;</span></td>`;
+        else if(v>16)    cells+=`<td><span class="badge-mayor">${v}</span></td>`;
+        else if(v<16)    cells+=`<td><span class="badge-menor">${v}</span></td>`;
+        else             cells+=`<td>${v}</td>`;
+      }
+    });
+    cells+=`<td class="td-total">${total.toLocaleString('es-MX',{maximumFractionDigits:1})}</td>`;
+    tbody+=`<tr class="${banda}">${cells}</tr>`;
+  });
+
+  $('tablaContainer').innerHTML=`<div class="tabla-scroll"><table id="tbl"><thead>${r1}${r2}</thead><tbody>${tbody}</tbody></table></div>`;
+
+  // Ajustar top de fila 2 dinámicamente para evitar hueco
+  requestAnimationFrame(()=>{
+    const tbl=$('tbl'); if(!tbl) return;
+    const row1=tbl.querySelector('thead tr:first-child'); if(!row1) return;
+    const h=row1.getBoundingClientRect().height;
+    tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th=>th.style.top=h+'px');
+  });
+
+  $('tblInfo').textContent=`${rows.length.toLocaleString()} unidades · ${fechas.length} fecha(s) · ${data.length.toLocaleString()} registros`;
+}
+
+function mostrarAvisoRango(nMeses,data){
+  const chips=generarChipsTrimestres();
+  $('tablaContainer').innerHTML=`<div class="aviso-wrap"><div class="aviso-rango">
+    <div class="aviso-icono">&#128337;</div>
+    <div class="aviso-texto">
+      <strong>El rango seleccionado abarca ${nMeses} meses &mdash; selecciona un trimestre.</strong>
+      <p>La tabla pivote se muestra en bloques de hasta <b>3 meses</b>. Haz clic en un trimestre o usa <b>Descargar Excel</b> para exportar el rango completo.</p>
+      <div class="aviso-chips">${chips.map(c=>`<span class="chip" onclick="aplicarTrimestre('${c.sd}','${c.ed}')">${c.label}</span>`).join('')}</div>
+    </div></div></div>`;
+  $('tblInfo').textContent=`${data.length.toLocaleString()} registros · ${nMeses} meses — selecciona un trimestre`;
+}
+
+// ── Render ───────────────────────────────────────────────────────
+let renderTimer=null;
+function render(){
+  clearTimeout(renderTimer);
+  renderTimer=setTimeout(()=>{
+    const data=getFiltered();
+    updateKPIs(data);
+    const nMeses=mesesDistintos(data.map(d=>d['FECHA CONSUMO']).filter(Boolean));
+    if(filters.sd&&filters.ed) $('rangoLabel').textContent=filters.sd+' → '+filters.ed;
+    if(nMeses>MAX_MESES) mostrarAvisoRango(nMeses,data);
+    else { const {rowMap,fechas}=buildPivot(data); renderPivot(data,fechas,rowMap); }
+  },120);
+}
+
+// ── Descarga Excel ────────────────────────────────────────────────
+function descargarExcel(){
+  const data=getFiltered(), {rowMap,fechas}=buildPivot(data), rows=Object.values(rowMap);
+  const wsData=[['DIVISIÓN','ECO','TIPO','MARCA','CARROCERÍA','MOTOR','CAP.L',...fechas,'TOTAL L']];
+  rows.forEach(row=>{
+    let total=0;
+    const cols=fechas.map(f=>{ const v=row.fechaMap[f]; if(v==null)return''; total+=v; return v; });
+    wsData.push([row.DIVISION,row.ECONOMICO,row.TIPO,row.MARCA,row.CARROCERIA,row.MOTOR,row.CAP,...cols,total]);
+  });
+  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[10,7,12,14,14,18,6,...fechas.map(()=>9),9].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'Consumos');
+  XLSX.writeFile(wb,'Consumos_Lubricantes.xlsx');
+}
+
+// ── Cerrar dropdowns al clic afuera ──────────────────────────────
+document.addEventListener('click',()=>
+  document.querySelectorAll('.dropdown-content,.dropdown-eco').forEach(d=>d.classList.remove('open'))
+);
+
+// ── Abrir dropdowns ──────────────────────────────────────────────
+
+</script>
+</body>
+</html>

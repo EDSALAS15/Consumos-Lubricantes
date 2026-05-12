@@ -297,7 +297,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
         <div class="filters-wrap">
           <!-- Fila 1 -->
           <div class="filters-row">
-            <div class="f-item"><label>A&#209;O</label><div class="multiselect" id="msA&#209;O">Todos...</div><div class="dropdown-content" id="optsA&#209;O"></div></div>
+            <div class="f-item"><label>A&#209;O</label><div class="multiselect" id="msANO">Todos...</div><div class="dropdown-content" id="optsANO"></div></div>
             <div class="f-item"><label>MES</label><div class="multiselect" id="msMES">Todos...</div><div class="dropdown-content" id="optsMES"></div></div>
             <div class="f-item"><label>DESDE</label><input type="date" id="dStart" onchange="applyFilters()"></div>
             <div class="f-item"><label>HASTA</label><input type="date" id="dEnd" onchange="applyFilters()"></div>
@@ -530,7 +530,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 // ══════════════════════════════════════════════════════════════════
 // ── Estado ───────────────────────────────────────────────────────
 const filters = {
-  'AÑO':[], MES:[], DIVISION:[], TIPO:[], MARCA:[], CARROCERIA:[], MOTOR:[], ECONOMICO:[],
+  'ANO':[], MES:[], DIVISION:[], TIPO:[], MARCA:[], CARROCERIA:[], MOTOR:[], ECONOMICO:[],
   sd:'', ed:''
 };
 let mayorActivo=false, menorActivo=false, excedeActivo=false;
@@ -574,7 +574,7 @@ function buildFilters(){
   }
   const años  = [...new Set(FECHAS.map(getAño))].filter(Boolean).sort();
   const meses = MESES_NOM.filter(m=>FECHAS.some(f=>getMes(f)===m));
-  buildDD('AÑO',       años);
+  buildDD('ANO',       años);
   buildDD('MES',       meses);
   buildDD('DIVISION',  [...sD].filter(Boolean).sort());
   buildDD('TIPO',      [...sT].filter(Boolean).sort());
@@ -631,7 +631,7 @@ function resetAll(){
   mayorActivo=false; menorActivo=false; excedeActivo=false;
   ['btnMayor','btnMenor','btnExcede'].forEach(id=>$(id).classList.remove('btn-active'));
   document.querySelectorAll('.dropdown-content input[type=checkbox]').forEach(cb=>cb.checked=false);
-  ['AÑO','MES','DIVISION','TIPO','MARCA','CARROCERIA','MOTOR','ECONOMICO']
+  ['ANO','MES','DIVISION','TIPO','MARCA','CARROCERIA','MOTOR','ECONOMICO']
     .forEach(f=>{ const el=$('ms'+f); if(el) el.textContent='Todos...'; });
   if($('searchECONOMICO')) $('searchECONOMICO').value='';
   renderEcos(_allEcos);
@@ -675,7 +675,7 @@ function getFiltered(){
       const f=FECHAS[fi];
       if(filters.sd&&f<filters.sd) continue;
       if(filters.ed&&f>filters.ed) continue;
-      if(filters['AÑO'].length&&!filters['AÑO'].includes(getAño(f))) continue;
+      if(filters['ANO'].length&&!filters['ANO'].includes(getAño(f))) continue;
       if(filters.MES.length   &&!filters.MES.includes(getMes(f)))    continue;
       const q=U_MAP.get(ui*nF+fi); if(q==null) continue;
       const cant=q/10;

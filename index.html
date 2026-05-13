@@ -545,7 +545,7 @@ const mesLabel = ym => { const [y,m]=ym.split('-'); return MESES_CORTO[parseInt(
 const mesesDistintos = arr => new Set(arr.map(f=>f.substring(0,7))).size;
 
 function rangoUltimosNMeses(n){
-  const all = RAW_DATA.map(d=>d['FECHA CONSUMO']).filter(Boolean).sort();
+  const all = [...FECHAS].filter(Boolean).sort();
   if(!all.length) return {sd:'',ed:''};
   const ultima = all[all.length-1];
   let [ay,am] = ultima.substring(0,7).split('-').map(Number);
@@ -584,11 +584,10 @@ function buildFilters(){
   buildDD('ECONOMICO', [...sE].filter(Boolean).sort((a,b)=>+a-+b));
   _allEcos=[...sE].filter(Boolean).sort((a,b)=>+a-+b);
   renderEcos(_allEcos);
-  if(FECHAS.length){
-    const sorted=[...FECHAS].sort();
-    filters.sd=sorted[0]; filters.ed=sorted[sorted.length-1];
-    $('dStart').value=filters.sd; $('dEnd').value=filters.ed;
-  }
+  // Iniciar con los últimos 3 meses para que la tabla cargue de inmediato
+  const rng = rangoUltimosNMeses(3);
+  filters.sd=rng.sd; filters.ed=rng.ed;
+  $('dStart').value=filters.sd; $('dEnd').value=filters.ed;
 }
 
 function buildDD(field, opts){
@@ -724,7 +723,7 @@ function buildPivot(data){
 }
 
 function generarChipsTrimestres(){
-  const all=RAW_DATA.map(d=>d['FECHA CONSUMO']).filter(Boolean).sort();
+  const all=[...FECHAS].filter(Boolean).sort();
   if(!all.length) return [];
   let [cy,cm]=all[0].substring(0,7).split('-').map(Number);
   const [ey,em]=all[all.length-1].substring(0,7).split('-').map(Number);
@@ -803,6 +802,10 @@ function mostrarAvisoRango(nMeses,data){
 
 // ── Render ───────────────────────────────────────────────────────
 let renderTimer=null;
+function mesesDistintos(fechas){
+  return new Set(fechas.map(f=>f.substring(0,7))).size;
+}
+
 function render(){
   clearTimeout(renderTimer);
   renderTimer=setTimeout(()=>{

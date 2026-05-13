@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 
+
 :root{
   --rojo:#C10230; --gris:#F4F4F4; --azul:#0071C1;
   --side-w:220px; --side-bg:#333F48; --side-grp:#263038; --side-txt:#ccc;
@@ -263,6 +264,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 .load-sub{font-size:11px;color:#999;font-family:"Segoe UI",sans-serif}
 .load-err{font-size:13px;color:#C10230;font-weight:700;text-align:center;max-width:420px;line-height:1.6}
 
+
 </style>
 </head>
 <body>
@@ -363,17 +365,44 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 </div>
 <script>
 
-// ══════════════════════════════════════════════════════════════════
-// CONFIGURACIÓN — solo cambia esta línea si mueves el archivo
-// ══════════════════════════════════════════════════════════════════
-const EXCEL_URL =
-  'https://raw.githubusercontent.com/edsalas15/Consumos-Lubricantes/main/Consumosdeaceites.xlsx';
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════════════
+const EXCEL_URL = 'https://raw.githubusercontent.com/edsalas15/Consumos-Lubricantes/main/Consumosdeaceites.xlsx';
 
-// ── Variables globales de datos comprimidos ───────────────────────
-let UNITS=[], FECHAS=[], INV=[[],[],[],[],[],[]];
-let U_MAP=new Map(), nU=0, nF=0;
+// ═══════════════════════════════════════════════════════════════
+// ESTADO GLOBAL — declarado antes de todo
+// ═══════════════════════════════════════════════════════════════
+const filters = {
+  'ANO':[], MES:[], DIVISION:[], TIPO:[], MARCA:[], CARROCERIA:[], MOTOR:[], ECONOMICO:[],
+  sd:'', ed:''
+};
+let mayorActivo = false, menorActivo = false, excedeActivo = false;
+let renderTimer = null;
 
-// ── Parseo de fecha serial/string de Excel → "YYYY-MM-DD" ────────
+const MAX_MESES   = 3;
+const MESES_NOM   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+const $       = id => document.getElementById(id);
+const getMes  = s => s ? MESES_NOM[parseInt(s.substring(5,7))-1]||'' : '';
+const getAño  = s => s ? s.substring(0,4) : '';
+const mesLabel = ym => { const [y,m]=ym.split('-'); return MESES_CORTO[parseInt(m)-1]+' '+y; };
+
+// ═══════════════════════════════════════════════════════════════
+// DATOS — declarados globalmente, llenados por procesarDatos()
+// ═══════════════════════════════════════════════════════════════
+let INV    = [];   // [DIVISIONES, TIPOS, MARCAS, CARROCERIAS, MOTORES, CAPACIDADES]
+let UNITS  = [];   // [D_idx, ECO_str, T_idx, M_idx, C_idx, MO_idx, CAP_idx]
+let FECHAS = [];   // ["YYYY-MM-DD", ...]
+let U_MAP  = new Map(); // ui*nF+fi → cantidad×10
+let nU = 0;
+let nF = 0;
+let _allEcos = [];
+
+// ═══════════════════════════════════════════════════════════════
+// PROCESAMIENTO DEL EXCEL
+// ═══════════════════════════════════════════════════════════════
 function excelDateToStr(v){
   if(v==null||v==='') return '';
   if(typeof v==='string'){
@@ -391,170 +420,127 @@ function excelDateToStr(v){
   return '';
 }
 
-// ── Procesar filas del Excel → estructuras comprimidas ───────────
-function procesarDatos(rows){
-  // ── UNA SOLA PASADA sobre todas las filas ─────────────────────
-  const units_map={}, unit_list=[];
-  const fechas_set=new Set();
-  const pivot_tmp=new Map();  // key=unitKey|fecha → cantidad acumulada
+function procesarDatos(rows) {
+  const units_map = {}, unit_list = [];
+  const fechas_set = new Set();
+  const pivot_tmp  = new Map();
 
-  for(const r of rows){
-    const div  = (String(r['DIVISION']||'').trim().toUpperCase()==='VICTORIA')
-                  ? 'VICTORIA' : String(r['DIVISION']||'').trim();
-    const eco  = String(r['ECONOMICO']||'').replace(/\.0$/,'').trim();
-    const tipo = String(r['TIPO']||'').trim();
-    const marca= String(r['MARCA DE UNIDAD']||'').trim();
-    const carr = String(r['TIPO DE CARROCERIA']||'').trim();
-    const motor= String(r['MOTOR']||'').trim();
-    const cap  = r['CAPACIDAD LTS']!=null ? String(r['CAPACIDAD LTS']) : '';
-    const fecha= excelDateToStr(r['FECHA CONSUMO']);
-    const cant = Number(r['CANTIDAD']||0);
+  for(const r of rows) {
+    const div   = (String(r['DIVISION']||'').trim().toUpperCase()==='VICTORIA')
+                    ? 'VICTORIA' : String(r['DIVISION']||'').trim();
+    const eco   = String(r['ECONOMICO']||'').replace(/\.0$/,'').trim();
+    const tipo  = String(r['TIPO']||'').trim();
+    const marca = String(r['MARCA DE UNIDAD']||'').trim();
+    const carr  = String(r['TIPO DE CARROCERIA']||'').trim();
+    const motor = String(r['MOTOR']||'').trim();
+    const cap   = r['CAPACIDAD LTS'] != null ? String(r['CAPACIDAD LTS']) : '';
+    const fecha = excelDateToStr(r['FECHA CONSUMO']);
+    const cant  = Number(r['CANTIDAD']||0);
     if(!fecha || isNaN(cant)) continue;
 
     fechas_set.add(fecha);
-
-    const unitKey=`${div}|${eco}|${tipo}|${marca}|${carr}|${motor}|${cap}`;
-    if(!(unitKey in units_map)){
-      units_map[unitKey]=unit_list.length;
+    const unitKey = div+'|'+eco+'|'+tipo+'|'+marca+'|'+carr+'|'+motor+'|'+cap;
+    if(!(unitKey in units_map)) {
+      units_map[unitKey] = unit_list.length;
       unit_list.push([div,eco,tipo,marca,carr,motor,cap]);
     }
-
-    // Acumular pivot en esta misma pasada
-    const pKey=unitKey+'||'+fecha;
+    const pKey = unitKey + '||' + fecha;
     pivot_tmp.set(pKey, (pivot_tmp.get(pKey)||0) + cant);
   }
 
-  // ── Vocabularios ───────────────────────────────────────────────
+  // Vocabularios
   const da=new Set(),ta=new Set(),ma=new Set(),ca=new Set(),moa=new Set(),caa=new Set();
-  for(const u of unit_list){
-    da.add(u[0]);ta.add(u[2]);ma.add(u[3]);ca.add(u[4]);moa.add(u[5]);caa.add(u[6]);
+  for(const u of unit_list) {
+    da.add(u[0]); ta.add(u[2]); ma.add(u[3]); ca.add(u[4]); moa.add(u[5]); caa.add(u[6]);
   }
-  const darr=[...da].sort(),tarr=[...ta].sort(),marr=[...ma].sort(),
-        carr2=[...ca].sort(),moarr=[...moa].sort(),caarr=[...caa].sort();
-  INV=[darr,tarr,marr,carr2,moarr,caarr];
-  const di={},ti={},mi={},ci={},moi={},cai={};
+  const darr=[...da].sort(), tarr=[...ta].sort(), marr=[...ma].sort(),
+        carr2=[...ca].sort(), moarr=[...moa].sort(), caarr=[...caa].sort();
+
+  INV = [darr, tarr, marr, carr2, moarr, caarr];
+  const di={}, ti={}, mi={}, ci={}, moi={}, cai={};
   darr.forEach((v,i)=>di[v]=i);  tarr.forEach((v,i)=>ti[v]=i);
   marr.forEach((v,i)=>mi[v]=i);  carr2.forEach((v,i)=>ci[v]=i);
-  moarr.forEach((v,i)=>moi[v]=i);caarr.forEach((v,i)=>cai[v]=i);
+  moarr.forEach((v,i)=>moi[v]=i); caarr.forEach((v,i)=>cai[v]=i);
 
-  FECHAS=[...fechas_set].sort();
-  const fi_map={};
-  FECHAS.forEach((f,i)=>fi_map[f]=i);
-  nF=FECHAS.length;
+  FECHAS = [...fechas_set].sort();
+  const fi_map = {};
+  FECHAS.forEach((f,i) => fi_map[f]=i);
+  nF = FECHAS.length;
 
-  UNITS=unit_list.map(u=>[di[u[0]],u[1],ti[u[2]],mi[u[3]],ci[u[4]],moi[u[5]],cai[u[6]]]);
-  nU=UNITS.length;
+  UNITS = unit_list.map(u => [di[u[0]], u[1], ti[u[2]], mi[u[3]], ci[u[4]], moi[u[5]], cai[u[6]]]);
+  nU = UNITS.length;
 
-  // ── Pivot desde acumulado (sin segunda pasada) ─────────────────
-  U_MAP=new Map();
-  for(const [pKey,qty] of pivot_tmp){
-    const sep=pKey.lastIndexOf('||');
-    const unitKey=pKey.substring(0,sep);
-    const fecha  =pKey.substring(sep+2);
-    const ui=units_map[unitKey];
-    const fi=fi_map[fecha];
-    if(ui==null||fi==null) continue;
+  U_MAP = new Map();
+  for(const [pKey, qty] of pivot_tmp) {
+    const sep = pKey.lastIndexOf('||');
+    const uk  = pKey.substring(0, sep);
+    const f   = pKey.substring(sep+2);
+    const ui  = units_map[uk];
+    const fi  = fi_map[f];
+    if(ui == null || fi == null) continue;
     U_MAP.set(ui*nF+fi, Math.round(qty*10));
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CARGA DESDE GITHUB
+// ═══════════════════════════════════════════════════════════════
+async function cargarExcel() {
+  const sub = $('loadSub');
+  try {
+    sub.textContent = 'Descargando archivo Excel...';
+    const resp = await fetch(EXCEL_URL);
+    if(!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + resp.statusText);
 
-// ── Carga principal ───────────────────────────────────────────────
-async function cargarExcel(){
-  const sub=$('loadSub');
-  try{
-    sub.textContent='Descargando archivo...';
-    const resp=await fetch(EXCEL_URL);
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    sub.textContent = 'Leyendo Excel...';
+    const buf = await resp.arrayBuffer();
+    const wb  = XLSX.read(buf, {type:'array', cellDates:false, cellNF:false, cellStyles:false});
+    const ws  = wb.Sheets[wb.SheetNames[0]];
 
-    sub.textContent='Leyendo Excel...';
-    const buf=await resp.arrayBuffer();
+    sub.textContent = 'Procesando datos...';
+    const rows = XLSX.utils.sheet_to_json(ws, {raw:true, defval:null});
 
-    // cellDates:false + cellStyles:false = mucho más rápido
-    const wb=XLSX.read(buf,{type:'array',cellDates:false,cellNF:false,cellStyles:false});
-    const ws=wb.Sheets[wb.SheetNames[0]];
+    sub.textContent = 'Construyendo índices (' + rows.length.toLocaleString('es-MX') + ' registros)...';
+    await new Promise(res => setTimeout(res, 0));
 
-    sub.textContent='Procesando datos...';
-    // sheet_to_json con raw:true es más rápido (sin conversión de tipos)
-    const rows=XLSX.utils.sheet_to_json(ws,{raw:true,defval:null});
-
-    sub.textContent=`Construyendo índices (${rows.length.toLocaleString('es-MX')} registros)...`;
-    // Ceder el hilo una vez para que el navegador actualice el mensaje
-    await new Promise(res=>setTimeout(res,0));
     procesarDatos(rows);
 
-    sub.textContent=`✓ ${rows.length.toLocaleString('es-MX')} registros · ${nU.toLocaleString('es-MX')} unidades`;
-    $('loadingOverlay').style.display='none';
-    $('mainUI').style.display='block';
+    $('loadingOverlay').style.display = 'none';
+    $('mainUI').style.display = 'block';
     buildFilters();
     render();
 
-  }catch(err){
-    console.error('Error:',err);
-    const ov=$('loadingOverlay');
-    ov.querySelector('.spinner').style.display='none';
-    ov.querySelector('.load-txt').style.display='none';
-    sub.style.display='none';
-    const dv=document.createElement('div');
-    dv.className='load-err';
-    dv.innerHTML=`&#9888;&#65039; No se pudo cargar el archivo.<br><br>
-      <small>${err.message}</small><br><br>
-      Verifica que el repositorio sea público y el archivo exista.<br><br>
-      <button onclick="cargarExcel()" style="background:#C10230;color:#fff;border:none;
-        padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">
-        &#8635; Reintentar</button>`;
+  } catch(err) {
+    console.error('Error cargando Excel:', err);
+    const ov = $('loadingOverlay');
+    ov.querySelector('.spinner').style.display  = 'none';
+    ov.querySelector('.load-txt').style.display = 'none';
+    sub.style.display = 'none';
+    const dv = document.createElement('div');
+    dv.className = 'load-err';
+    dv.innerHTML = '&#9888;&#65039; No se pudo cargar el archivo.<br><br>' +
+      '<small>' + err.message + '</small><br><br>' +
+      'Verifica que el repositorio sea p&#250;blico y el archivo exista.<br><br>' +
+      '<button onclick="cargarExcel()" style="background:#C10230;color:#fff;border:none;' +
+      'padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">' +
+      '&#8635; Reintentar</button>';
     ov.appendChild(dv);
   }
 }
 
-window.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('.multiselect').forEach(ms=>{
-    ms.addEventListener('click',ev=>{
-      ev.stopPropagation();
-      const dd=ms.nextElementSibling;
-      const was=dd.classList.contains('open');
-      document.querySelectorAll('.dropdown-content,.dropdown-eco')
-        .forEach(d=>d.classList.remove('open'));
-      if(!was) dd.classList.add('open');
-    });
-  });
-  document.addEventListener('click',()=>
-    document.querySelectorAll('.dropdown-content,.dropdown-eco')
-      .forEach(d=>d.classList.remove('open'))
-  );
-  cargarExcel();
-});
-
-// ══════════════════════════════════════════════════════════════════
-// LÓGICA DE LA APP — idéntica al original
-// ══════════════════════════════════════════════════════════════════
-// ── Estado ───────────────────────────────────────────────────────
-const filters = {
-  'ANO':[], MES:[], DIVISION:[], TIPO:[], MARCA:[], CARROCERIA:[], MOTOR:[], ECONOMICO:[],
-  sd:'', ed:''
-};
-let mayorActivo=false, menorActivo=false, excedeActivo=false;
-const MAX_MESES = 3;
-const MESES_NOM   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
-const $   = id => document.getElementById(id);
-const getMes = s => s ? MESES_NOM[parseInt(s.substring(5,7))-1]||'' : '';
-const getAño = s => s ? s.substring(0,4) : '';
-const mesLabel = ym => { const [y,m]=ym.split('-'); return MESES_CORTO[parseInt(m)-1]+' '+y; };
-const mesesDistintos = arr => new Set(arr.map(f=>f.substring(0,7))).size;
-
-function rangoUltimosNMeses(n){
-  const all = [...FECHAS].filter(Boolean).sort();
-  if(!all.length) return {sd:'',ed:''};
+// ═══════════════════════════════════════════════════════════════
+// LÓGICA DE FILTROS
+// ═══════════════════════════════════════════════════════════════
+function rangoUltimosNMeses(n) {
+  const all = [...FECHAS].sort();
+  if(!all.length) return {sd:'', ed:''};
   const ultima = all[all.length-1];
   let [ay,am] = ultima.substring(0,7).split('-').map(Number);
-  let iniM=am-(n-1), iniY=ay;
-  while(iniM<1){iniM+=12;iniY--;}
-  return {sd:`${iniY}-${String(iniM).padStart(2,'0')}-01`, ed:ultima};
+  let iniM = am-(n-1), iniY = ay;
+  while(iniM < 1) { iniM += 12; iniY--; }
+  return {sd: iniY+'-'+String(iniM).padStart(2,'0')+'-01', ed: ultima};
 }
 
-// ── Sidebar ──────────────────────────────────────────────────────
 function toggleGroup(id){
   document.querySelector('#'+id+' .nav-group-header').classList.toggle('open');
   $('children-'+id).classList.toggle('open');
@@ -563,8 +549,6 @@ function setVista(btn){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
-
-// ── Dropdowns genéricos ──────────────────────────────────────────
 function buildFilters(){
   // Una sola pasada sobre UNITS extrae únicos de todos los campos
   const sD=new Set(),sT=new Set(),sM=new Set(),sC=new Set(),sMO=new Set(),sE=new Set();
@@ -589,16 +573,12 @@ function buildFilters(){
   filters.sd=rng.sd; filters.ed=rng.ed;
   $('dStart').value=filters.sd; $('dEnd').value=filters.ed;
 }
-
 function buildDD(field, opts){
   const el=$('opts'+field); if(!el) return;
   el.innerHTML = opts.map(o=>
     `<label><input type="checkbox" value="${o}" onchange="handleFilter('${field}')"> ${o}</label>`
   ).join('');
 }
-
-// ── Económico con buscador ───────────────────────────────────────
-let _allEcos = [];
 function renderEcos(opts){
   const el=$('listaECONOMICO'); if(!el) return;
   el.innerHTML = opts.map(o=>
@@ -616,8 +596,6 @@ function handleFilterEco(){
   $('msECONOMICO').textContent = filters.ECONOMICO.length ? filters.ECONOMICO.join(', ') : 'Todos...';
   render();
 }
-
-// ── Filtros genéricos ────────────────────────────────────────────
 function handleFilter(field){
   const cont=$('opts'+field); if(!cont) return;
   filters[field] = Array.from(cont.querySelectorAll('input:checked')).map(i=>i.value);
@@ -625,7 +603,6 @@ function handleFilter(field){
   render();
 }
 function applyFilters(){ filters.sd=$('dStart').value; filters.ed=$('dEnd').value; render(); }
-
 function resetAll(){
   Object.keys(filters).forEach(k=>Array.isArray(filters[k])?filters[k]=[]:filters[k]='');
   mayorActivo=false; menorActivo=false; excedeActivo=false;
@@ -640,7 +617,6 @@ function resetAll(){
   $('dStart').value=sd; $('dEnd').value=ed;
   render();
 }
-
 function toggleMayor(){
   mayorActivo=!mayorActivo; $('btnMayor').classList.toggle('btn-active',mayorActivo);
   if(mayorActivo){ menorActivo=false; excedeActivo=false; $('btnMenor').classList.remove('btn-active'); $('btnExcede').classList.remove('btn-active'); }
@@ -658,7 +634,9 @@ function toggleExcede(){
 }
 function aplicarTrimestre(sd,ed){ filters.sd=sd; filters.ed=ed; $('dStart').value=sd; $('dEnd').value=ed; render(); }
 
-// ── Filtrado ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// DATOS / RENDER
+// ═══════════════════════════════════════════════════════════════
 function getFiltered(){
   const result=[];
   for(let ui=0;ui<nU;ui++){
@@ -692,8 +670,6 @@ function getFiltered(){
   }
   return result;
 }
-
-// ── KPIs ─────────────────────────────────────────────────────────
 function updateKPIs(data){
   const total=data.length, suma=data.reduce((a,d)=>a+Number(d.CANTIDAD||0),0);
   const prom=total>0?(suma/total).toFixed(1):0;
@@ -706,8 +682,6 @@ function updateKPIs(data){
   $('kpi5').textContent=exceden.toLocaleString('es-MX');
   $('kpi6').textContent=new Set(data.map(d=>d.ECONOMICO)).size.toLocaleString('es-MX');
 }
-
-// ── Pivot ────────────────────────────────────────────────────────
 function rowKey(d){
   return [d.DIVISION,d.ECONOMICO,d.TIPO,d['MARCA DE UNIDAD'],d['TIPO DE CARROCERIA'],d.MOTOR,d['CAPACIDAD LTS']].join('||');
 }
@@ -721,7 +695,6 @@ function buildPivot(data){
   });
   return {rowMap,fechas};
 }
-
 function generarChipsTrimestres(){
   const all=[...FECHAS].filter(Boolean).sort();
   if(!all.length) return [];
@@ -738,7 +711,6 @@ function generarChipsTrimestres(){
   }
   return chips;
 }
-
 function renderPivot(data,fechas,rowMap){
   const rows=Object.values(rowMap);
   const INFO=['DIVISI&#211;N','ECO','TIPO','MARCA','CARROCER&#205;A','MOTOR','CAP.L'];
@@ -787,7 +759,6 @@ function renderPivot(data,fechas,rowMap){
 
   $('tblInfo').textContent=`${rows.length.toLocaleString()} unidades · ${fechas.length} fecha(s) · ${data.length.toLocaleString()} registros`;
 }
-
 function mostrarAvisoRango(nMeses,data){
   const chips=generarChipsTrimestres();
   $('tablaContainer').innerHTML=`<div class="aviso-wrap"><div class="aviso-rango">
@@ -799,13 +770,9 @@ function mostrarAvisoRango(nMeses,data){
     </div></div></div>`;
   $('tblInfo').textContent=`${data.length.toLocaleString()} registros · ${nMeses} meses — selecciona un trimestre`;
 }
-
-// ── Render ───────────────────────────────────────────────────────
-let renderTimer=null;
 function mesesDistintos(fechas){
   return new Set(fechas.map(f=>f.substring(0,7))).size;
 }
-
 function render(){
   clearTimeout(renderTimer);
   renderTimer=setTimeout(()=>{
@@ -817,8 +784,6 @@ function render(){
     else { const {rowMap,fechas}=buildPivot(data); renderPivot(data,fechas,rowMap); }
   },120);
 }
-
-// ── Descarga Excel ────────────────────────────────────────────────
 function descargarExcel(){
   const data=getFiltered(), {rowMap,fechas}=buildPivot(data), rows=Object.values(rowMap);
   const wsData=[['DIVISIÓN','ECO','TIPO','MARCA','CARROCERÍA','MOTOR','CAP.L',...fechas,'TOTAL L']];
@@ -833,12 +798,26 @@ function descargarExcel(){
   XLSX.writeFile(wb,'Consumos_Lubricantes.xlsx');
 }
 
-// ── Cerrar dropdowns al clic afuera ──────────────────────────────
-document.addEventListener('click',()=>
-  document.querySelectorAll('.dropdown-content,.dropdown-eco').forEach(d=>d.classList.remove('open'))
-);
-
-// ── Abrir dropdowns ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// INICIO
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.multiselect').forEach(ms => {
+    ms.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const dd = ms.nextElementSibling;
+      const was = dd.classList.contains('open');
+      document.querySelectorAll('.dropdown-content,.dropdown-eco')
+        .forEach(d => d.classList.remove('open'));
+      if(!was) dd.classList.add('open');
+    });
+  });
+  document.addEventListener('click', () =>
+    document.querySelectorAll('.dropdown-content,.dropdown-eco')
+      .forEach(d => d.classList.remove('open'))
+  );
+  cargarExcel();
+});
 
 </script>
 </body>

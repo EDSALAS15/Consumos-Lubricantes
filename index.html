@@ -362,7 +362,6 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
   </div>
 </div>
 <script>
-
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN
 // ═══════════════════════════════════════════════════════════════
@@ -515,7 +514,7 @@ async function cargarExcel() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// LÓGICA DE FILTROS
+// FILTROS Y UI
 // ═══════════════════════════════════════════════════════════════
 function rangoUltimosNMeses(n) {
   const all = [...FECHAS].sort();
@@ -526,7 +525,6 @@ function rangoUltimosNMeses(n) {
   while(iniM < 1) { iniM += 12; iniY--; }
   return {sd: iniY+'-'+String(iniM).padStart(2,'0')+'-01', ed: ultima};
 }
-
 function toggleGroup(id){
   document.querySelector('#'+id+' .nav-group-header').classList.toggle('open');
   $('children-'+id).classList.toggle('open');
@@ -621,66 +619,8 @@ function toggleExcede(){
 function aplicarTrimestre(sd,ed){ filters.sd=sd; filters.ed=ed; $('dStart').value=sd; $('dEnd').value=ed; render(); }
 
 // ═══════════════════════════════════════════════════════════════
-// DATOS / RENDER
+// RENDER — optimizado sin objetos intermedios
 // ═══════════════════════════════════════════════════════════════
-function getFiltered(){
-  const result=[];
-  for(let ui=0;ui<nU;ui++){
-    const u=UNITS[ui];
-    const div=INV[0][u[0]],tipo=INV[1][u[2]],marca=INV[2][u[3]],
-          carr=INV[3][u[4]],motor=INV[4][u[5]],eco=u[1],cap=INV[5][u[6]];
-    if(filters.DIVISION.length  &&!filters.DIVISION.includes(div))   continue;
-    if(filters.TIPO.length      &&!filters.TIPO.includes(tipo))       continue;
-    if(filters.MARCA.length     &&!filters.MARCA.includes(marca))     continue;
-    if(filters.CARROCERIA.length&&!filters.CARROCERIA.includes(carr)) continue;
-    if(filters.MOTOR.length     &&!filters.MOTOR.includes(motor))     continue;
-    if(filters.ECONOMICO.length &&!filters.ECONOMICO.includes(eco))   continue;
-    for(let fi=0;fi<nF;fi++){
-      const f=FECHAS[fi];
-      if(filters.sd&&f<filters.sd) continue;
-      if(filters.ed&&f>filters.ed) continue;
-      if(filters['ANO'].length&&!filters['ANO'].includes(getAño(f))) continue;
-      if(filters.MES.length   &&!filters.MES.includes(getMes(f)))    continue;
-      const q=U_MAP.get(ui*nF+fi); if(q==null) continue;
-      const cant=q/10;
-      if(mayorActivo &&cant<=16) continue;
-      if(menorActivo &&cant>=16) continue;
-      if(excedeActivo&&(+cap<=0||cant<=+cap)) continue;
-      result.push({
-        'DIVISION':div,'ECONOMICO':eco,'TIPO':tipo,
-        'MARCA DE UNIDAD':marca,'TIPO DE CARROCERIA':carr,
-        'MOTOR':motor,'CAPACIDAD LTS':cap,
-        'FECHA CONSUMO':f,'CANTIDAD':cant
-      });
-    }
-  }
-  return result;
-}
-function updateKPIs(data){
-  const total=data.length, suma=data.reduce((a,d)=>a+Number(d.CANTIDAD||0),0);
-  const prom=total>0?(suma/total).toFixed(1):0;
-  const maxV=total>0?Math.max(...data.map(d=>Number(d.CANTIDAD||0))):0;
-  const exceden=data.filter(d=>Number(d.CANTIDAD||0)>Number(d['CAPACIDAD LTS']||9999)).length;
-  $('kpi1').textContent=total.toLocaleString('es-MX');
-  $('kpi2').textContent=suma.toLocaleString('es-MX',{maximumFractionDigits:1});
-  $('kpi3').textContent=prom;
-  $('kpi4').textContent=maxV.toLocaleString('es-MX');
-  $('kpi5').textContent=exceden.toLocaleString('es-MX');
-  $('kpi6').textContent=new Set(data.map(d=>d.ECONOMICO)).size.toLocaleString('es-MX');
-}
-function rowKey(d){
-  return [d.DIVISION,d.ECONOMICO,d.TIPO,d['MARCA DE UNIDAD'],d['TIPO DE CARROCERIA'],d.MOTOR,d['CAPACIDAD LTS']].join('||');
-}
-function buildPivot(data){
-  const fechas=[...new Set(data.map(d=>d['FECHA CONSUMO']).filter(Boolean))].sort();
-  const rowMap={};
-  data.forEach(d=>{
-    const rk=rowKey(d);
-    if(!rowMap[rk]) rowMap[rk]={DIVISION:d.DIVISION,ECONOMICO:d.ECONOMICO,TIPO:d.TIPO,MARCA:d['MARCA DE UNIDAD'],CARROCERIA:d['TIPO DE CARROCERIA'],MOTOR:d.MOTOR,CAP:d['CAPACIDAD LTS'],fechaMap:{}};
-    rowMap[rk].fechaMap[d['FECHA CONSUMO']]=(rowMap[rk].fechaMap[d['FECHA CONSUMO']]||0)+Number(d.CANTIDAD||0);
-  });
-  return {rowMap,fechas};
-}
 function generarChipsTrimestres(){
   const all=[...FECHAS].filter(Boolean).sort();
   if(!all.length) return [];
@@ -697,55 +637,7 @@ function generarChipsTrimestres(){
   }
   return chips;
 }
-function renderPivot(data,fechas,rowMap){
-  const rows=Object.values(rowMap);
-  const INFO=['DIVISI&#211;N','ECO','TIPO','MARCA','CARROCER&#205;A','MOTOR','CAP.L'];
-  const mesesMap={};
-  fechas.forEach(f=>{ const ym=f.substring(0,7); if(!mesesMap[ym]) mesesMap[ym]=[]; mesesMap[ym].push(f); });
-  const yms=Object.keys(mesesMap).sort();
-
-  let r1='<tr>';
-  INFO.forEach(h=>r1+=`<th class="th-info" rowspan="2">${h}</th>`);
-  yms.forEach(ym=>r1+=`<th class="th-mes" colspan="${mesesMap[ym].length}">${mesLabel(ym)}</th>`);
-  r1+='<th class="th-total" rowspan="2">TOTAL L</th></tr>';
-
-  let r2='<tr>';
-  fechas.forEach(f=>r2+=`<th class="th-fecha">${f.split('-')[2]}</th>`);
-  r2+='</tr>';
-
-  let tbody='';
-  rows.forEach((row,idx)=>{
-    const cap=Number(row.CAP||0), banda=idx%2===0?'row-par':'row-impar';
-    let total=0;
-    let cells=`<td class="td-info">${row.DIVISION}</td><td class="td-info">${row.ECONOMICO}</td><td class="td-info">${row.TIPO}</td><td class="td-info">${row.MARCA}</td><td class="td-info">${row.CARROCERIA}</td><td class="td-info">${row.MOTOR}</td><td class="td-info">${row.CAP}</td>`;
-    fechas.forEach(f=>{
-      const v=row.fechaMap[f];
-      if(v==null){ cells+='<td class="td-dash">&#8212;</td>'; }
-      else{
-        total+=v;
-        if(cap>0&&v>cap) cells+=`<td><span class="badge-excede">${v}&#9888;</span></td>`;
-        else if(v>16)    cells+=`<td><span class="badge-mayor">${v}</span></td>`;
-        else if(v<16)    cells+=`<td><span class="badge-menor">${v}</span></td>`;
-        else             cells+=`<td>${v}</td>`;
-      }
-    });
-    cells+=`<td class="td-total">${total.toLocaleString('es-MX',{maximumFractionDigits:1})}</td>`;
-    tbody+=`<tr class="${banda}">${cells}</tr>`;
-  });
-
-  $('tablaContainer').innerHTML=`<div class="tabla-scroll"><table id="tbl"><thead>${r1}${r2}</thead><tbody>${tbody}</tbody></table></div>`;
-
-  // Ajustar top de fila 2 dinámicamente para evitar hueco
-  requestAnimationFrame(()=>{
-    const tbl=$('tbl'); if(!tbl) return;
-    const row1=tbl.querySelector('thead tr:first-child'); if(!row1) return;
-    const h=row1.getBoundingClientRect().height;
-    tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th=>th.style.top=h+'px');
-  });
-
-  $('tblInfo').textContent=`${rows.length.toLocaleString()} unidades · ${fechas.length} fecha(s) · ${data.length.toLocaleString()} registros`;
-}
-function mostrarAvisoRango(nMeses,data){
+function mostrarAvisoRango(nMeses, nRegistros){
   const chips=generarChipsTrimestres();
   $('tablaContainer').innerHTML=`<div class="aviso-wrap"><div class="aviso-rango">
     <div class="aviso-icono">&#128337;</div>
@@ -754,36 +646,214 @@ function mostrarAvisoRango(nMeses,data){
       <p>La tabla pivote se muestra en bloques de hasta <b>3 meses</b>. Haz clic en un trimestre o usa <b>Descargar Excel</b> para exportar el rango completo.</p>
       <div class="aviso-chips">${chips.map(c=>`<span class="chip" onclick="aplicarTrimestre('${c.sd}','${c.ed}')">${c.label}</span>`).join('')}</div>
     </div></div></div>`;
-  $('tblInfo').textContent=`${data.length.toLocaleString()} registros · ${nMeses} meses — selecciona un trimestre`;
-}
-function mesesDistintos(fechas){
-  return new Set(fechas.map(f=>f.substring(0,7))).size;
-}
-function render(){
-  clearTimeout(renderTimer);
-  renderTimer=setTimeout(()=>{
-    const data=getFiltered();
-    updateKPIs(data);
-    const nMeses=mesesDistintos(data.map(d=>d['FECHA CONSUMO']).filter(Boolean));
-    if(filters.sd&&filters.ed) $('rangoLabel').textContent=filters.sd+' → '+filters.ed;
-    if(nMeses>MAX_MESES) mostrarAvisoRango(nMeses,data);
-    else { const {rowMap,fechas}=buildPivot(data); renderPivot(data,fechas,rowMap); }
-  },120);
-}
-function descargarExcel(){
-  const data=getFiltered(), {rowMap,fechas}=buildPivot(data), rows=Object.values(rowMap);
-  const wsData=[['DIVISIÓN','ECO','TIPO','MARCA','CARROCERÍA','MOTOR','CAP.L',...fechas,'TOTAL L']];
-  rows.forEach(row=>{
-    let total=0;
-    const cols=fechas.map(f=>{ const v=row.fechaMap[f]; if(v==null)return''; total+=v; return v; });
-    wsData.push([row.DIVISION,row.ECONOMICO,row.TIPO,row.MARCA,row.CARROCERIA,row.MOTOR,row.CAP,...cols,total]);
-  });
-  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols']=[10,7,12,14,14,18,6,...fechas.map(()=>9),9].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb,ws,'Consumos');
-  XLSX.writeFile(wb,'Consumos_Lubricantes.xlsx');
+  $('tblInfo').textContent=`${nRegistros.toLocaleString()} unidades · ${nMeses} meses — selecciona un trimestre`;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// RENDER — trabaja directo sobre UNITS/U_MAP sin crear objetos intermedios
+// ═══════════════════════════════════════════════════════════════
+
+// Convierte los arrays de filtros a Sets una vez por render (O(1) lookup)
+function buildFilterSets() {
+  return {
+    D:   filters.DIVISION.length   ? new Set(filters.DIVISION)   : null,
+    T:   filters.TIPO.length       ? new Set(filters.TIPO)       : null,
+    M:   filters.MARCA.length      ? new Set(filters.MARCA)      : null,
+    C:   filters.CARROCERIA.length ? new Set(filters.CARROCERIA) : null,
+    MO:  filters.MOTOR.length      ? new Set(filters.MOTOR)      : null,
+    E:   filters.ECONOMICO.length  ? new Set(filters.ECONOMICO)  : null,
+    ANO: filters.ANO.length        ? new Set(filters.ANO)        : null,
+    MES: filters.MES.length        ? new Set(filters.MES)        : null,
+  };
+}
+
+// Obtener índices de fechas activas (solo 769 fechas máximo — muy rápido)
+function getActiveFechaIdxs(fs) {
+  const r = [];
+  for(let fi = 0; fi < nF; fi++) {
+    const f = FECHAS[fi];
+    if(filters.sd && f < filters.sd) continue;
+    if(filters.ed && f > filters.ed) continue;
+    if(fs.ANO && !fs.ANO.has(getAño(f))) continue;
+    if(fs.MES && !fs.MES.has(getMes(f)))  continue;
+    r.push(fi);
+  }
+  return r;
+}
+
+// Obtener índices de unidades activas
+function getActiveUnitIdxs(fs) {
+  const r = [];
+  for(let ui = 0; ui < nU; ui++) {
+    const u = UNITS[ui];
+    if(fs.D  && !fs.D.has(INV[0][u[0]]))  continue;
+    if(fs.T  && !fs.T.has(INV[1][u[2]]))  continue;
+    if(fs.M  && !fs.M.has(INV[2][u[3]]))  continue;
+    if(fs.C  && !fs.C.has(INV[3][u[4]]))  continue;
+    if(fs.MO && !fs.MO.has(INV[4][u[5]])) continue;
+    if(fs.E  && !fs.E.has(u[1]))           continue;
+    r.push(ui);
+  }
+  return r;
+}
+
+// KPIs — una sola pasada, sin crear objetos
+function updateKPIs(uIdxs, fIdxs) {
+  let total=0, suma=0, maxV=0, exceden=0;
+  const ecos = new Set();
+  for(const ui of uIdxs) {
+    const u = UNITS[ui], cap = +INV[5][u[6]] || 0;
+    ecos.add(u[1]);
+    for(const fi of fIdxs) {
+      const q = U_MAP.get(ui*nF+fi); if(q == null) continue;
+      const v = q/10;
+      if(mayorActivo  && v <= 16) continue;
+      if(menorActivo  && v >= 16) continue;
+      if(excedeActivo && (cap <= 0 || v <= cap)) continue;
+      total++; suma += v;
+      if(v > maxV) maxV = v;
+      if(cap > 0 && v > cap) exceden++;
+    }
+  }
+  $('kpi1').textContent = total.toLocaleString('es-MX');
+  $('kpi2').textContent = suma.toLocaleString('es-MX',{maximumFractionDigits:1});
+  $('kpi3').textContent = total > 0 ? (suma/total).toFixed(1) : 0;
+  $('kpi4').textContent = maxV.toLocaleString('es-MX');
+  $('kpi5').textContent = exceden.toLocaleString('es-MX');
+  $('kpi6').textContent = ecos.size.toLocaleString('es-MX');
+}
+
+// mesesDistintos — sobre array de índices
+function mesesDistintos(fIdxs) {
+  return new Set(fIdxs.map(fi => FECHAS[fi].substring(0,7))).size;
+}
+
+// renderPivot — trabaja directo sobre índices, sin objetos intermedios
+function renderPivot(uIdxs, fIdxs) {
+  // Agrupar fechas por mes para encabezado
+  const mMap = {};
+  for(const fi of fIdxs) {
+    const ym = FECHAS[fi].substring(0,7);
+    if(!mMap[ym]) mMap[ym] = [];
+    mMap[ym].push(fi);
+  }
+  const yms = Object.keys(mMap).sort();
+  const INFO = ['DIVISÍON','ECO','TIPO','MARCA','CARROCÉRÍA','MOTOR','CAP.L'];
+
+  // Encabezado — array join es más rápido que concatenación
+  const h1 = ['<tr>'];
+  for(const h of INFO) h1.push(`<th class="th-info" rowspan="2">${h}</th>`);
+  for(const ym of yms) h1.push(`<th class="th-mes" colspan="${mMap[ym].length}">${mesLabel(ym)}</th>`);
+  h1.push('<th class="th-total" rowspan="2">TOTAL L</th></tr>');
+
+  const h2 = ['<tr>'];
+  for(const fi of fIdxs) h2.push(`<th class="th-fecha">${FECHAS[fi].slice(8)}</th>`);
+  h2.push('</tr>');
+
+  // Filas — una pasada, sin objetos
+  const rows = [];
+  for(let i = 0; i < uIdxs.length; i++) {
+    const ui = uIdxs[i], u = UNITS[ui];
+    const cap = +INV[5][u[6]] || 0;
+    const banda = i%2===0 ? 'row-par' : 'row-impar';
+    let total = 0;
+
+    const cells = [
+      `<td class="td-info">${INV[0][u[0]]}</td>`,
+      `<td class="td-info">${u[1]}</td>`,
+      `<td class="td-info">${INV[1][u[2]]}</td>`,
+      `<td class="td-info">${INV[2][u[3]]}</td>`,
+      `<td class="td-info">${INV[3][u[4]]}</td>`,
+      `<td class="td-info">${INV[4][u[5]]}</td>`,
+      `<td class="td-info">${INV[5][u[6]]}</td>`,
+    ];
+
+    for(const fi of fIdxs) {
+      const q = U_MAP.get(ui*nF+fi);
+      if(q == null) { cells.push('<td class="td-dash">—</td>'); continue; }
+      const v = q/10;
+      if(mayorActivo  && v <= 16) { cells.push('<td class="td-dash">—</td>'); continue; }
+      if(menorActivo  && v >= 16) { cells.push('<td class="td-dash">—</td>'); continue; }
+      if(excedeActivo && (cap<=0||v<=cap)) { cells.push('<td class="td-dash">—</td>'); continue; }
+      total += v;
+      const vs = v%1===0 ? v : v.toFixed(1);
+      if(cap>0&&v>cap)  cells.push(`<td><span class="badge-excede">${vs}&#9888;</span></td>`);
+      else if(v>16)     cells.push(`<td><span class="badge-mayor">${vs}</span></td>`);
+      else if(v<16)     cells.push(`<td><span class="badge-menor">${vs}</span></td>`);
+      else              cells.push(`<td>${vs}</td>`);
+    }
+
+    const tot = total%1===0 ? total : total.toFixed(1);
+    cells.push(`<td class="td-total">${tot}</td>`);
+    rows.push(`<tr class="${banda}">${cells.join('')}</tr>`);
+  }
+
+  $('tablaContainer').innerHTML =
+    `<div class="tabla-scroll"><table id="tbl"><thead>${h1.join('')}${h2.join('')}</thead><tbody>${rows.join('')}</tbody></table></div>`;
+
+  requestAnimationFrame(() => {
+    const tbl = $('tbl'); if(!tbl) return;
+    const row1 = tbl.querySelector('thead tr:first-child'); if(!row1) return;
+    const h = row1.getBoundingClientRect().height;
+    tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th => th.style.top = h+'px');
+  });
+
+  $('tblInfo').textContent =
+    `${uIdxs.length.toLocaleString()} unidades · ${fIdxs.length} fecha(s)`;
+}
+
+// descargarExcel — trabaja también con índices
+function descargarExcel() {
+  const fs = buildFilterSets();
+  const uIdxs = getActiveUnitIdxs(fs);
+  const fIdxs = getActiveFechaIdxs(fs);
+  const header = ['DIVISIÓN','ECO','TIPO','MARCA','CARROCERÍA','MOTOR','CAP.L',
+                  ...fIdxs.map(fi=>FECHAS[fi]),'TOTAL L'];
+  const wsData = [header];
+  for(const ui of uIdxs) {
+    const u = UNITS[ui], cap = +INV[5][u[6]]||0;
+    let total = 0;
+    const cols = fIdxs.map(fi => {
+      const q = U_MAP.get(ui*nF+fi); if(q==null) return '';
+      const v = q/10;
+      if(mayorActivo  && v<=16) return '';
+      if(menorActivo  && v>=16) return '';
+      if(excedeActivo && (cap<=0||v<=cap)) return '';
+      total += v;
+      return v%1===0 ? v : +v.toFixed(1);
+    });
+    wsData.push([INV[0][u[0]],u[1],INV[1][u[2]],INV[2][u[3]],
+                 INV[3][u[4]],INV[4][u[5]],INV[5][u[6]],...cols,
+                 total%1===0?total:+total.toFixed(1)]);
+  }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [10,7,12,14,14,18,6,...fIdxs.map(()=>9),9].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Consumos');
+  XLSX.writeFile(wb, 'Consumos_Lubricantes.xlsx');
+}
+
+// render — usa índices directamente
+let renderTimer = null;
+function render() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => {
+    const fs     = buildFilterSets();
+    const uIdxs  = getActiveUnitIdxs(fs);
+    const fIdxs  = getActiveFechaIdxs(fs);
+    updateKPIs(uIdxs, fIdxs);
+    if(filters.sd && filters.ed)
+      $('rangoLabel').textContent = filters.sd + ' → ' + filters.ed;
+    const nM = mesesDistintos(fIdxs);
+    if(nM > MAX_MESES) mostrarAvisoRango(nM, uIdxs.length);
+    else               renderPivot(uIdxs, fIdxs);
+  }, 80);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// INICIO
+// ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
 // INICIO
 // ═══════════════════════════════════════════════════════════════

@@ -365,7 +365,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN
 // ═══════════════════════════════════════════════════════════════
-const EXCEL_URL = 'https://raw.githubusercontent.com/edsalas15/Consumos-Lubricantes/main/Consumosdeaceites.xlsx';
+const DATOS_URL = 'https://raw.githubusercontent.com/edsalas15/Consumos-Lubricantes/main/Consumosdeaceites.xlsx';
 
 // ═══════════════════════════════════════════════════════════════
 // ESTADO GLOBAL — declarado antes de todo
@@ -400,102 +400,30 @@ let _allEcos = [];
 // ═══════════════════════════════════════════════════════════════
 // PROCESAMIENTO DEL EXCEL
 // ═══════════════════════════════════════════════════════════════
-function excelDateToStr(v){
-  if(v==null||v==='') return '';
-  if(typeof v==='string'){
-    const m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if(m) return `${m[1]}-${m[2]}-${m[3]}`;
-    const m2=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if(m2) return `${m2[3]}-${String(m2[2]).padStart(2,'0')}-${String(m2[1]).padStart(2,'0')}`;
-    return v.substring(0,10);
-  }
-  if(typeof v==='number'){
-    const d=new Date(Math.round((v-25569)*86400*1000));
-    const y=d.getUTCFullYear(),mo=d.getUTCMonth()+1,dy=d.getUTCDate();
-    return `${y}-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
-  }
-  return '';
-}
 
-function procesarDatos(rows) {
-  const units_map = {}, unit_list = [];
-  const fechas_set = new Set();
-  const pivot_tmp  = new Map();
 
-  for(const r of rows) {
-    const div   = (String(r['DIVISION']||'').trim().toUpperCase()==='VICTORIA')
-                    ? 'VICTORIA' : String(r['DIVISION']||'').trim();
-    const eco   = String(r['ECONOMICO']||'').replace(/\.0$/,'').trim();
-    const tipo  = String(r['TIPO']||'').trim();
-    const marca = String(r['MARCA DE UNIDAD']||'').trim();
-    const carr  = String(r['TIPO DE CARROCERIA']||'').trim();
-    const motor = String(r['MOTOR']||'').trim();
-    const cap   = r['CAPACIDAD LTS'] != null ? String(r['CAPACIDAD LTS']) : '';
-    const fecha = excelDateToStr(r['FECHA CONSUMO']);
-    const cant  = Number(r['CANTIDAD']||0);
-    if(!fecha || isNaN(cant)) continue;
 
-    fechas_set.add(fecha);
-    const unitKey = div+'|'+eco+'|'+tipo+'|'+marca+'|'+carr+'|'+motor+'|'+cap;
-    if(!(unitKey in units_map)) {
-      units_map[unitKey] = unit_list.length;
-      unit_list.push([div,eco,tipo,marca,carr,motor,cap]);
-    }
-    const pKey = unitKey + '||' + fecha;
-    pivot_tmp.set(pKey, (pivot_tmp.get(pKey)||0) + cant);
-  }
-
-  // Vocabularios
-  const da=new Set(),ta=new Set(),ma=new Set(),ca=new Set(),moa=new Set(),caa=new Set();
-  for(const u of unit_list) {
-    da.add(u[0]); ta.add(u[2]); ma.add(u[3]); ca.add(u[4]); moa.add(u[5]); caa.add(u[6]);
-  }
-  const darr=[...da].sort(), tarr=[...ta].sort(), marr=[...ma].sort(),
-        carr2=[...ca].sort(), moarr=[...moa].sort(), caarr=[...caa].sort();
-
-  INV = [darr, tarr, marr, carr2, moarr, caarr];
-  const di={}, ti={}, mi={}, ci={}, moi={}, cai={};
-  darr.forEach((v,i)=>di[v]=i);  tarr.forEach((v,i)=>ti[v]=i);
-  marr.forEach((v,i)=>mi[v]=i);  carr2.forEach((v,i)=>ci[v]=i);
-  moarr.forEach((v,i)=>moi[v]=i); caarr.forEach((v,i)=>cai[v]=i);
-
-  FECHAS = [...fechas_set].sort();
-  const fi_map = {};
-  FECHAS.forEach((f,i) => fi_map[f]=i);
-  nF = FECHAS.length;
-
-  UNITS = unit_list.map(u => [di[u[0]], u[1], ti[u[2]], mi[u[3]], ci[u[4]], moi[u[5]], cai[u[6]]]);
-  nU = UNITS.length;
-
-  U_MAP = new Map();
-  for(const [pKey, qty] of pivot_tmp) {
-    const sep = pKey.lastIndexOf('||');
-    const uk  = pKey.substring(0, sep);
-    const f   = pKey.substring(sep+2);
-    const ui  = units_map[uk];
-    const fi  = fi_map[f];
-    if(ui == null || fi == null) continue;
-    U_MAP.set(ui*nF+fi, Math.round(qty*10));
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════
 // CARGA DESDE GITHUB
 // ═══════════════════════════════════════════════════════════════
-async function cargarExcel() {
+async async function cargarExcel() {
   try {
-    const resp = await fetch(EXCEL_URL);
+    const resp = await fetch(DATOS_URL);
     if(!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + resp.statusText);
 
-    const buf = await resp.arrayBuffer();
-    const wb  = XLSX.read(buf, {type:'array', cellDates:false, cellNF:false, cellStyles:false});
-    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const json = await resp.json();
 
-    const rows = XLSX.utils.sheet_to_json(ws, {raw:true, defval:null});
+    // Cargar estructuras directamente desde el JSON pre-procesado
+    INV    = json.INV;
+    UNITS  = json.UNITS;
+    FECHAS = json.FECHAS;
+    nU     = UNITS.length;
+    nF     = FECHAS.length;
 
-    await new Promise(res => setTimeout(res, 0));
-
-    procesarDatos(rows);
+    // Reconstruir U_MAP desde PIVOT
+    U_MAP = new Map();
+    for(const [ui, fi, q] of json.PIVOT) U_MAP.set(ui*nF+fi, q);
 
     $('loadingMsg').style.display = 'none';
     $('mainUI').style.display = 'block';
@@ -503,10 +431,12 @@ async function cargarExcel() {
     render();
 
   } catch(err) {
-    console.error('Error cargando Excel:', err);
+    console.error('Error cargando datos:', err);
     const msg = $('loadingMsg');
     if(msg) msg.innerHTML = '&#9888;&#65039; No se pudo cargar el archivo.<br>' +
       '<small style="color:#888">' + err.message + '</small><br><br>' +
+      '<small>Verifica que <b>datos.json</b> exista en el repositorio.<br>' +
+      'Puedes generarlo ejecutando el workflow manualmente en GitHub Actions.</small><br><br>' +
       '<button onclick="cargarExcel()" style="background:#C10230;color:#fff;border:none;' +
       'padding:6px 16px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">' +
       '&#8635; Reintentar</button>';
@@ -873,6 +803,7 @@ window.addEventListener('DOMContentLoaded', () => {
   );
   cargarExcel();
 });
+
 
 </script>
 </body>

@@ -138,7 +138,6 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
   overflow-x:auto;
   overflow-y:auto;
   max-height:500px;
-  contain:strict;
   border-radius:0 0 8px 8px;
   border:1px solid #ddd;
   border-top:none;
@@ -208,7 +207,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 #tbl tbody tr:hover    td.td-info:first-child{background:#c8d9ef!important}
 
 /* Cuerpo general */
-#tbl tbody tr{will-change:contents}
+#tbl tbody tr{will-change:auto}
 #tbl tbody td{
   padding:3px 5px;
   border-bottom:1px solid #e8e8e8;

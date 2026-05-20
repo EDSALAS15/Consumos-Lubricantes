@@ -138,6 +138,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
   overflow-x:auto;
   overflow-y:auto;
   max-height:500px;
+  contain:strict;
   border-radius:0 0 8px 8px;
   border:1px solid #ddd;
   border-top:none;
@@ -207,6 +208,7 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 #tbl tbody tr:hover    td.td-info:first-child{background:#c8d9ef!important}
 
 /* Cuerpo general */
+#tbl tbody tr{will-change:contents}
 #tbl tbody td{
   padding:3px 5px;
   border-bottom:1px solid #e8e8e8;
@@ -717,18 +719,56 @@ function mesesDistintos(fIdxs) {
 }
 
 // renderPivot — trabaja directo sobre índices, sin objetos intermedios
+// Construye el HTML de UNA fila del pivot
+function buildRow(i, ui, fIdxs) {
+  const u    = UNITS[ui];
+  const cap  = +INV[5][u[6]] || 0;
+  const b    = i%2===0 ? 'row-par' : 'row-impar';
+  let total  = 0;
+  const cells = [
+    `<td class="td-info">${INV[0][u[0]]}</td>`,
+    `<td class="td-info">${u[1]}</td>`,
+    `<td class="td-info">${INV[1][u[2]]}</td>`,
+    `<td class="td-info">${INV[2][u[3]]}</td>`,
+    `<td class="td-info">${INV[3][u[4]]}</td>`,
+    `<td class="td-info">${INV[4][u[5]]}</td>`,
+    `<td class="td-info">${INV[5][u[6]]}</td>`,
+  ];
+  for(const fi of fIdxs) {
+    const q = U_MAP.get(ui*nF+fi);
+    if(q == null) { cells.push('<td class="td-dash">—</td>'); continue; }
+    const v = q/10;
+    if(mayorActivo  && v<=16) { cells.push('<td class="td-dash">—</td>'); continue; }
+    if(menorActivo  && v>=16) { cells.push('<td class="td-dash">—</td>'); continue; }
+    if(excedeActivo && (cap<=0||v<=cap)) { cells.push('<td class="td-dash">—</td>'); continue; }
+    total += v;
+    const vs = v%1===0 ? v : v.toFixed(1);
+    if(cap>0&&v>cap)  cells.push(`<td><span class="badge-excede">${vs}&#9888;</span></td>`);
+    else if(v>16)     cells.push(`<td><span class="badge-mayor">${vs}</span></td>`);
+    else if(v<16)     cells.push(`<td><span class="badge-menor">${vs}</span></td>`);
+    else              cells.push(`<td>${vs}</td>`);
+  }
+  const tot = total%1===0 ? total : total.toFixed(1);
+  cells.push(`<td class="td-total">${tot}</td>`);
+  return `<tr class="${b}">${cells.join('')}</tr>`;
+}
+
+// Render ID actual — cancela renders anteriores si el usuario filtra rápido
+let _renderID = 0;
+
 function renderPivot(uIdxs, fIdxs) {
-  // Agrupar fechas por mes para encabezado
+  const myID = ++_renderID;
+
+  // Encabezado
   const mMap = {};
   for(const fi of fIdxs) {
     const ym = FECHAS[fi].substring(0,7);
     if(!mMap[ym]) mMap[ym] = [];
     mMap[ym].push(fi);
   }
-  const yms = Object.keys(mMap).sort();
-  const INFO = ['DIVISÍON','ECO','TIPO','MARCA','CARROCÉRÍA','MOTOR','CAP.L'];
+  const yms  = Object.keys(mMap).sort();
+  const INFO = ['DIVISÍON','ECO','TIPO','MARCA','CARROCERÍA','MOTOR','CAP.L'];
 
-  // Encabezado — array join es más rápido que concatenación
   const h1 = ['<tr>'];
   for(const h of INFO) h1.push(`<th class="th-info" rowspan="2">${h}</th>`);
   for(const ym of yms) h1.push(`<th class="th-mes" colspan="${mMap[ym].length}">${mesLabel(ym)}</th>`);
@@ -738,56 +778,49 @@ function renderPivot(uIdxs, fIdxs) {
   for(const fi of fIdxs) h2.push(`<th class="th-fecha">${FECHAS[fi].slice(8)}</th>`);
   h2.push('</tr>');
 
-  // Filas — una pasada, sin objetos
-  const rows = [];
-  for(let i = 0; i < uIdxs.length; i++) {
-    const ui = uIdxs[i], u = UNITS[ui];
-    const cap = +INV[5][u[6]] || 0;
-    const banda = i%2===0 ? 'row-par' : 'row-impar';
-    let total = 0;
-
-    const cells = [
-      `<td class="td-info">${INV[0][u[0]]}</td>`,
-      `<td class="td-info">${u[1]}</td>`,
-      `<td class="td-info">${INV[1][u[2]]}</td>`,
-      `<td class="td-info">${INV[2][u[3]]}</td>`,
-      `<td class="td-info">${INV[3][u[4]]}</td>`,
-      `<td class="td-info">${INV[4][u[5]]}</td>`,
-      `<td class="td-info">${INV[5][u[6]]}</td>`,
-    ];
-
-    for(const fi of fIdxs) {
-      const q = U_MAP.get(ui*nF+fi);
-      if(q == null) { cells.push('<td class="td-dash">—</td>'); continue; }
-      const v = q/10;
-      if(mayorActivo  && v <= 16) { cells.push('<td class="td-dash">—</td>'); continue; }
-      if(menorActivo  && v >= 16) { cells.push('<td class="td-dash">—</td>'); continue; }
-      if(excedeActivo && (cap<=0||v<=cap)) { cells.push('<td class="td-dash">—</td>'); continue; }
-      total += v;
-      const vs = v%1===0 ? v : v.toFixed(1);
-      if(cap>0&&v>cap)  cells.push(`<td><span class="badge-excede">${vs}&#9888;</span></td>`);
-      else if(v>16)     cells.push(`<td><span class="badge-mayor">${vs}</span></td>`);
-      else if(v<16)     cells.push(`<td><span class="badge-menor">${vs}</span></td>`);
-      else              cells.push(`<td>${vs}</td>`);
-    }
-
-    const tot = total%1===0 ? total : total.toFixed(1);
-    cells.push(`<td class="td-total">${tot}</td>`);
-    rows.push(`<tr class="${banda}">${cells.join('')}</tr>`);
-  }
+  // Primeras 150 filas — inmediato
+  const CHUNK = 150;
+  const firstRows = [];
+  const limit1 = Math.min(CHUNK, uIdxs.length);
+  for(let i=0; i<limit1; i++) firstRows.push(buildRow(i, uIdxs[i], fIdxs));
 
   $('tablaContainer').innerHTML =
-    `<div class="tabla-scroll"><table id="tbl"><thead>${h1.join('')}${h2.join('')}</thead><tbody>${rows.join('')}</tbody></table></div>`;
+    `<div class="tabla-scroll"><table id="tbl">` +
+    `<thead>${h1.join('')}${h2.join('')}</thead>` +
+    `<tbody id="tblBody">${firstRows.join('')}</tbody>` +
+    `</table></div>`;
 
+  // Ajustar top fila 2 del encabezado
   requestAnimationFrame(() => {
     const tbl = $('tbl'); if(!tbl) return;
     const row1 = tbl.querySelector('thead tr:first-child'); if(!row1) return;
-    const h = row1.getBoundingClientRect().height;
-    tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th => th.style.top = h+'px');
+    const hh = row1.getBoundingClientRect().height;
+    tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th => th.style.top = hh+'px');
   });
 
   $('tblInfo').textContent =
-    `${uIdxs.length.toLocaleString()} unidades · ${fIdxs.length} fecha(s)`;
+    `${Math.min(limit1,uIdxs.length).toLocaleString()} de ${uIdxs.length.toLocaleString()} unidades · ${fIdxs.length} fecha(s)`;
+
+  // Si hay más filas, agregarlas en chunks sin bloquear el hilo principal
+  if(uIdxs.length > CHUNK) {
+    let cursor = CHUNK;
+    function addChunk() {
+      if(myID !== _renderID) return; // Cancelar si hay un render más nuevo
+      const tbody = $('tblBody');
+      if(!tbody) return;
+      const end   = Math.min(cursor + CHUNK, uIdxs.length);
+      const chunk = [];
+      for(let i=cursor; i<end; i++) chunk.push(buildRow(i, uIdxs[i], fIdxs));
+      tbody.insertAdjacentHTML('beforeend', chunk.join(''));
+      cursor = end;
+      $('tblInfo').textContent =
+        `${cursor.toLocaleString()} de ${uIdxs.length.toLocaleString()} unidades · ${fIdxs.length} fecha(s)`;
+      if(cursor < uIdxs.length) requestAnimationFrame(addChunk);
+      else $('tblInfo').textContent =
+        `${uIdxs.length.toLocaleString()} unidades · ${fIdxs.length} fecha(s)`;
+    }
+    requestAnimationFrame(addChunk);
+  }
 }
 
 // descargarExcel — trabaja también con índices

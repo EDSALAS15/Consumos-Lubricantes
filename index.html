@@ -407,36 +407,94 @@ let _allEcos = [];
 // ═══════════════════════════════════════════════════════════════
 // CARGA DESDE GITHUB
 // ═══════════════════════════════════════════════════════════════
+// Aplica los datos JSON a las variables globales
+function aplicarDatos(json) {
+  INV    = json.INV;
+  UNITS  = json.UNITS;
+  FECHAS = json.FECHAS;
+  nU     = UNITS.length;
+  nF     = FECHAS.length;
+  U_MAP  = new Map();
+  for(const [ui, fi, q] of json.PIVOT) U_MAP.set(ui*nF+fi, q);
+}
+
+// Muestra la app
+function mostrarApp() {
+  $('loadingMsg').style.display = 'none';
+  $('mainUI').style.display     = 'block';
+  buildFilters();
+  render();
+}
+
 async function cargarExcel() {
+  const CACHE_KEY  = 'consumos_datos';
+  const CACHE_TS   = 'consumos_ts';
+  const msg        = $('loadingMsg');
+
   try {
-    const resp = await fetch(DATOS_URL);
+    // ── 1. Intentar cargar desde caché local ───────────────────
+    const cached = localStorage.getItem(CACHE_KEY);
+    if(cached) {
+      // Mostrar datos del caché instantáneamente
+      msg.textContent = '⚡ Cargando desde caché...';
+      const json = JSON.parse(cached);
+      aplicarDatos(json);
+      mostrarApp();
+
+      // ── 2. Verificar en background si hay datos más nuevos ───
+      // HEAD request es muy ligero — solo lee las cabeceras
+      fetch(DATOS_URL, {method:'HEAD', cache:'no-cache'})
+        .then(r => {
+          const serverTS = r.headers.get('Last-Modified') || r.headers.get('ETag') || '';
+          const localTS  = localStorage.getItem(CACHE_TS) || '';
+          if(serverTS && serverTS !== localTS) {
+            // Hay datos nuevos — descargar en background
+            console.log('Datos nuevos detectados, actualizando...');
+            return fetch(DATOS_URL, {cache:'no-cache'});
+          }
+        })
+        .then(r => r ? r.json() : null)
+        .then(json => {
+          if(!json) return;
+          // Guardar en caché
+          const r2 = fetch(DATOS_URL, {method:'HEAD', cache:'no-cache'});
+          localStorage.setItem(CACHE_KEY, JSON.stringify(json));
+          // Actualizar app con datos nuevos silenciosamente
+          aplicarDatos(json);
+          buildFilters();
+          render();
+          console.log('✓ Datos actualizados en segundo plano');
+        })
+        .catch(() => {}); // Errores en background no afectan al usuario
+
+      return; // Ya mostramos la app desde caché
+    }
+
+    // ── 3. Sin caché — primera carga ──────────────────────────
+    msg.textContent = '⏳ Descargando datos...';
+    const resp = await fetch(DATOS_URL, {cache:'no-cache'});
     if(!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + resp.statusText);
 
+    msg.textContent = '⏳ Procesando...';
     const json = await resp.json();
 
-    // Cargar estructuras directamente desde el JSON pre-procesado
-    INV    = json.INV;
-    UNITS  = json.UNITS;
-    FECHAS = json.FECHAS;
-    nU     = UNITS.length;
-    nF     = FECHAS.length;
+    // Guardar en caché para próximas visitas
+    try {
+      const ts = resp.headers.get('Last-Modified') || resp.headers.get('ETag') || new Date().toISOString();
+      localStorage.setItem(CACHE_KEY, JSON.stringify(json));
+      localStorage.setItem(CACHE_TS, ts);
+    } catch(e) {
+      console.warn('localStorage no disponible:', e);
+    }
 
-    // Reconstruir U_MAP desde PIVOT
-    U_MAP = new Map();
-    for(const [ui, fi, q] of json.PIVOT) U_MAP.set(ui*nF+fi, q);
-
-    $('loadingMsg').style.display = 'none';
-    $('mainUI').style.display = 'block';
-    buildFilters();
-    render();
+    aplicarDatos(json);
+    mostrarApp();
 
   } catch(err) {
     console.error('Error cargando datos:', err);
-    const msg = $('loadingMsg');
     if(msg) msg.innerHTML = '&#9888;&#65039; No se pudo cargar el archivo.<br>' +
       '<small style="color:#888">' + err.message + '</small><br><br>' +
-      '<small>Verifica que <b>datos.json</b> exista en el repositorio.<br>' +
-      'Puedes generarlo ejecutando el workflow manualmente en GitHub Actions.</small><br><br>' +
+      '<small>Verifica que <b>datos.json</b> exista en el repositorio.</small><br><br>' +
       '<button onclick="cargarExcel()" style="background:#C10230;color:#fff;border:none;' +
       'padding:6px 16px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">' +
       '&#8635; Reintentar</button>';

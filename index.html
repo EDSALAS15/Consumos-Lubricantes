@@ -407,7 +407,7 @@ let _allEcos = [];
 // ═══════════════════════════════════════════════════════════════
 // CARGA DESDE GITHUB
 // ═══════════════════════════════════════════════════════════════
-async async function cargarExcel() {
+async function cargarExcel() {
   try {
     const resp = await fetch(DATOS_URL);
     if(!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + resp.statusText);

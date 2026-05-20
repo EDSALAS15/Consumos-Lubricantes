@@ -542,7 +542,7 @@ function buildFilters(){
   _allEcos=[...sE].filter(Boolean).sort((a,b)=>+a-+b);
   renderEcos(_allEcos);
   // Iniciar con los últimos 3 meses para que la tabla cargue de inmediato
-  const rng = rangoUltimosNMeses(3);
+  const rng = rangoUltimosNMeses(1);
   filters.sd=rng.sd; filters.ed=rng.ed;
   $('dStart').value=filters.sd; $('dEnd').value=filters.ed;
 }
@@ -585,7 +585,7 @@ function resetAll(){
     .forEach(f=>{ const el=$('ms'+f); if(el) el.textContent='Todos...'; });
   if($('searchECONOMICO')) $('searchECONOMICO').value='';
   renderEcos(_allEcos);
-  const {sd,ed}=rangoUltimosNMeses(3);
+  const {sd,ed}=rangoUltimosNMeses(1);
   filters.sd=sd; filters.ed=ed;
   $('dStart').value=sd; $('dEnd').value=ed;
   render();

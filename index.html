@@ -671,8 +671,9 @@ function getActiveFechaIdxs(fs) {
 }
 
 // Obtener índices de unidades activas
-function getActiveUnitIdxs(fs) {
+function getActiveUnitIdxs(fs, fIdxs) {
   const r = [];
+  const btnFilter = mayorActivo || menorActivo || excedeActivo;
   for(let ui = 0; ui < nU; ui++) {
     const u = UNITS[ui];
     if(fs.D  && !fs.D.has(INV[0][u[0]]))  continue;
@@ -681,6 +682,21 @@ function getActiveUnitIdxs(fs) {
     if(fs.C  && !fs.C.has(INV[3][u[4]]))  continue;
     if(fs.MO && !fs.MO.has(INV[4][u[5]])) continue;
     if(fs.E  && !fs.E.has(u[1]))           continue;
+
+    // Si hay botón especial activo, exigir que la unidad tenga AL MENOS
+    // una celda que cumpla la condición dentro del rango de fechas visible
+    if(btnFilter && fIdxs) {
+      const cap = +INV[5][u[6]] || 0;
+      let tiene = false;
+      for(const fi of fIdxs) {
+        const q = U_MAP.get(ui*nF+fi); if(q == null) continue;
+        const v = q/10;
+        if(mayorActivo  && v > 16)                       { tiene = true; break; }
+        if(menorActivo  && v < 16)                       { tiene = true; break; }
+        if(excedeActivo && cap > 0 && v > cap)           { tiene = true; break; }
+      }
+      if(!tiene) continue;
+    }
     r.push(ui);
   }
   return r;
@@ -825,8 +841,8 @@ function renderPivot(uIdxs, fIdxs) {
 // descargarExcel — trabaja también con índices
 function descargarExcel() {
   const fs = buildFilterSets();
-  const uIdxs = getActiveUnitIdxs(fs);
   const fIdxs = getActiveFechaIdxs(fs);
+  const uIdxs = getActiveUnitIdxs(fs, fIdxs);
   const header = ['DIVISIÓN','ECO','TIPO','MARCA','CARROCERÍA','MOTOR','CAP.L',
                   ...fIdxs.map(fi=>FECHAS[fi]),'TOTAL L'];
   const wsData = [header];
@@ -858,8 +874,8 @@ function render() {
   clearTimeout(renderTimer);
   renderTimer = setTimeout(() => {
     const fs     = buildFilterSets();
-    const uIdxs  = getActiveUnitIdxs(fs);
     const fIdxs  = getActiveFechaIdxs(fs);
+    const uIdxs  = getActiveUnitIdxs(fs, fIdxs);
     updateKPIs(uIdxs, fIdxs);
     if(filters.sd && filters.ed)
       $('rangoLabel').textContent = filters.sd + ' → ' + filters.ed;

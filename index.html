@@ -14,7 +14,8 @@
   --col-total:#333F48;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Segoe UI",Tahoma,sans-serif;background:var(--gris);display:flex;flex-direction:column;min-height:100vh}
+body{font-family:"Segoe UI",sans-serif;background:var(--gris);display:flex;flex-direction:column;min-height:100vh}
+input,button,select,textarea,table,th,td{font-family:inherit}
 
 /* ── HEADER ─────────────────────────────────────── */
 .header-bar{display:flex;align-items:stretch;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.3)}
@@ -113,10 +114,10 @@ input[type="date"]{padding:1px 3px;border-radius:3px;border:1px solid #ccc;font-
 
 /* ── KPI ─────────────────────────────────────────── */
 .kpi-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-.kpi-card{flex:1;min-width:110px;background:#f9f9f9;border:1px solid #e8e8e8;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;text-align:center}
-.kpi-label{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#999}
-.kpi-value{font-size:20px;font-weight:800;color:#333F48;margin:4px 0}
-.kpi-sub{font-size:9px;color:#888888}
+.kpi-card{flex:1;min-width:110px;min-height:90px;background:#f9f9f9;border:1px solid #e8e8e8;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.kpi-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#999}
+.kpi-value{font-size:22px;font-weight:800;color:#333F48;margin:4px 0}
+.kpi-sub{font-size:10px;color:#888}
 
 /* ── TOOLBAR ─────────────────────────────────────── */
 .tabla-toolbar{display:flex;align-items:center;justify-content:space-between;background:#333F48;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;border-radius:8px 8px 0 0;gap:8px;flex-wrap:wrap}
